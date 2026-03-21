@@ -1,0 +1,1350 @@
+PROGRAM MK_LIB
+%SYSTEM
+%INVISIBLE
+%PRIORITY = 40
+%STACKSIZE = 3000
+%NOLOCKGROUP
+%NOBUSYLAMP
+%NOPAUSESHFT
+%NOPAUSE = ERROR + COMMAND + TPENABLE
+%COMMENT = 'Mengk Lib V25.12'
+
+CONST
+ERR_MSG	= 0
+ERR_PAUSE	= 1
+ERR_SRVO	= 2
+
+-- Socket is disconnect
+SM_DISCONN1 = 67212
+SM_DISCONN2 = 67213
+SM_DISCONN3 = 67214
+SM_DISCONN4 = 67208
+
+VAR
+g_timer1	:INTEGER
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : CNV_INT2STR
+-- Function  : Convert INTEGER to STRING (without leading space)
+-- Param
+--   in_int[in]: Integer value to convert.
+-- Return   : String representation.
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE CNV_INT2STR(in_int:INTEGER):STRING
+VAR
+str     :STRING[254]
+BEGIN
+    IF UNINIT(in_int) THEN POST_ERR(38092,'[CNV_INT2STR]in_int not init',0,ERR_SRVO);ABORT;ENDIF
+    CNV_INT_STR(in_int,0,0,str)
+    RETURN(SUB_STR(str,2,STR_LEN(str)-1))
+END CNV_INT2STR
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : CNV_REL2STR
+-- Function  : Convert REAL to STRING (without leading space)
+-- Param
+--   in_real[in]: Real value to convert.
+-- Return   : String representation.
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE CNV_REL2STR(in_real:REAL):STRING
+VAR
+str     :STRING[254]
+BEGIN
+    IF UNINIT(in_real) THEN POST_ERR(38092,'[CNV_INT2STR]in_real not init',0,ERR_SRVO);ABORT;ENDIF
+    CNV_REAL_STR((in_real),0,0,str)
+    RETURN(SUB_STR(str,2,STR_LEN(str)-1))
+END CNV_REL2STR
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : POW2
+-- Function  : Compute 2^n as INTEGER, n >= 0
+-- Param     : n [IN] - Power (integer)
+-- Return    : INTEGER, 2^n
+-- Author    : Zhao,Mengkang
+-- Date      : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE POW2(n:INTEGER):INTEGER
+VAR
+  p,i:INTEGER
+BEGIN
+  p = 1
+  IF n > 0 THEN
+    FOR i = 1 TO n DO
+      p = p * 2
+    ENDFOR
+  ENDIF
+  RETURN(p)
+END POW2
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : CNV_BYTE2BIT
+-- Function  : Convert a BYTE/integer (0-255) value to a bit array (ARRAY[8] OF INTEGER or BOOL).
+-- Param
+--   val[IN]      : Input BYTE/integer (0-255).
+--   out_bits[OUT]: Output ARRAY[8] OF INTEGER, where out_bits[1] is the 
+--    most significant bit (MSB) AND out_bits[8] is the least significant bit (LSB).
+-- Return  : None.
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE CNV_BYTE2BIT(val: INTEGER; out_bits: ARRAY OF INTEGER)
+VAR i: INTEGER
+BEGIN
+    FOR i = 1 TO 8 DO
+        out_bits[i] = (val DIV POW2(8-i)) MOD 2
+    ENDFOR
+END CNV_BYTE2BIT
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : CNV_BIT2BYTE
+-- Function  : Convert a bit array (ARRAY[8] OF INTEGER or BOOL) to a BYTE/integer (0-255).
+-- Param
+--   in_bits[IN] : Input array (ARRAY[8] OF INTEGER or BOOL), 
+--   where in_bits[1] is the most significant bit (MSB) AND in_bits[8] is the least significant bit (LSB).
+--   val[OUT]    : Output BYTE/integer (0-255).
+-- Return  : None.
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE CNV_BIT2BYTE(in_bits: ARRAY OF INTEGER; val: INTEGER)
+VAR i: INTEGER
+BEGIN
+    val = 0
+    FOR i = 1 TO 8 DO
+        IF in_bits[i] <> 0 THEN
+            val = val + POW2(8-i)
+        ENDIF
+    ENDFOR
+END CNV_BIT2BYTE
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : CNV_REL2BYTE
+-- Function  : Convert a 32-bit REAL (float) to IEEE754 4-byte representation (ARRAY[4] OF BYTE), supporting endianness.
+-- Param
+--   r_val[IN]        : Input float value.
+--   is_little[IN]    : TRUE = little-endian, FALSE = big-endian.
+--   byte_arr[OUT]    : Output ARRAY[4] OF BYTE.
+-- Return  : 0=OK, <0=error
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/10/07
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE CNV_REL2BYTE(
+    r_val:REAL;
+    is_little:BOOLEAN;
+    byte_arr:ARRAY OF BYTE)
+VAR
+    sta     : INTEGER
+    b            : ARRAY[4] OF BYTE
+BEGIN
+    IF UNINIT(is_little) THEN POST_ERR(38092,'[CNV_REL2BYTE]is_little not initialized',0,ERR_SRVO);ABORT;ENDIF
+    IF ARRAY_LEN(byte_arr) <> 4 THEN POST_ERR(38092,'[CNV_REL2BYTE]byte_arr lenth<>4',0,ERR_SRVO);ABORT;ENDIF
+
+    -- 1. Convert Real to Byte
+    sta = PUT_REAL_ABT(r_val,b,1)
+    IF (sta<>0) THEN POST_ERR(sta,'',0,ERR_SRVO);ABORT;ENDIF
+    
+    -- 2. Set output order
+    IF is_little THEN
+        byte_arr[1] = b[1]
+        byte_arr[2] = b[2]
+        byte_arr[3] = b[3]
+        byte_arr[4] = b[4]
+    ELSE
+        byte_arr[1] = b[4]
+        byte_arr[2] = b[3]
+        byte_arr[3] = b[2]
+        byte_arr[4] = b[1]
+    ENDIF
+END CNV_REL2BYTE
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : CNV_BYTE2REL
+-- Function  : Convert a 4-byte IEEE754 array (ARRAY[4] OF BYTE) to a 32-bit REAL (float), supporting endianness.
+-- Param
+--   byte_arr[IN]   : Input ARRAY[4] OF BYTE.
+--   is_little[IN]  : TRUE = little-endian, FALSE = big-endian.
+--   r_val[OUT]     : Output REAL value.
+-- Return  : 0=OK, <0=error.
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/10/07
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE CNV_BYTE2REL(
+    byte_arr:ARRAY OF BYTE;
+    is_little:BOOLEAN;
+    r_val:REAL)
+VAR
+    b       : ARRAY[4] OF BYTE
+    sta     : INTEGER
+BEGIN
+	IF UNINIT(is_little) THEN POST_ERR(38092,'[CNV_BYTE2REL]is_little not initialized',0,ERR_SRVO);ABORT;ENDIF
+    IF ARRAY_LEN(byte_arr) <> 4 THEN POST_ERR(38092,'[CNV_BYTE2REL]byte_arr lenth<>4',0,ERR_SRVO);ABORT;ENDIF
+
+    -- 1. Endianness adjust
+    IF is_little THEN
+        b[1] = byte_arr[1]
+        b[2] = byte_arr[2]
+        b[3] = byte_arr[3]
+        b[4] = byte_arr[4]
+    ELSE
+        b[1] = byte_arr[4]
+        b[2] = byte_arr[3]
+        b[3] = byte_arr[2]
+        b[4] = byte_arr[1]
+    ENDIF
+
+    -- 2. Convert Byte to Real
+    sta = GET_REAL_ABT(r_val,b,1)
+    IF (sta<>0) THEN POST_ERR(sta,'',0,ERR_SRVO);ABORT;ENDIF
+
+END CNV_BYTE2REL
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : GI32
+-- Function  : Read 32 digital input bits from IO and convert to REAL (IEEE754 float).
+-- Parameters:
+--   io_start [IN]   : Start IO address for 32 bits input.
+--   io_end   [IN]   : End IO address for 32 bits input (io_end - io_start + 1 must be 32).
+--   is_little[IN]   : Boolean flag, TRUE for little-endian byte order, FALSE for big-endian.
+--   real_val [OUT]  : Output REAL value converted from input bits.
+-- Return    : None.
+--
+-- Author    : Zhao,Mengkang
+-- Date      : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE GI32(io_start:INTEGER; io_end:INTEGER; is_little:BOOLEAN; real_val:REAL)
+VAR
+    index_byte : INTEGER        -- Byte index (1..4)
+    index_bit  : INTEGER        -- Bit index within byte (1..8)
+	byte_arr   : ARRAY[4] OF BYTE -- Temporary 4-byte buffer    
+    io_addr    : INTEGER        -- Calculated IO address for each bit
+    io_indexi  : INTEGER        -- IO index iterator
+    sta        : INTEGER        -- IO allocation status check
+BEGIN
+    -- Check parameter initialization
+    IF UNINIT(io_start) THEN POST_ERR(38092,'[GI32] io_start not initialized',0,ERR_SRVO);ABORT;ENDIF
+    IF UNINIT(io_end) THEN POST_ERR(38092,'[GI32] io_end not initialized',0,ERR_SRVO);ABORT;ENDIF
+    IF UNINIT(is_little) THEN POST_ERR(38092,'[GI32] is_little not initialized',0,ERR_SRVO); ABORT; ENDIF
+
+    -- Validate IO length must be exactly 32 bits
+    IF (io_end - io_start + 1) <> 32 THEN 
+        POST_ERR(38092,'[GI32] IO length must be 32 bits',0,ERR_SRVO)
+        RETURN
+    ENDIF
+	
+	-- Check that all corresponding DIN IO ports are unassigned and available
+    io_indexi = io_start
+    REPEAT
+        GET_PORT_ASG(1, io_indexi, 0, 0, 0, 0, 0, sta)  -- 1 = DIN
+        IF sta = 0 THEN
+            io_indexi = io_indexi + 1
+        ENDIF
+    UNTIL (sta <> 0) OR (io_indexi > io_end)
+        
+    IF sta <> 0 THEN
+        POST_ERR(38092, '[GI32] DI[' + CNV_INT2STR(io_indexi) + '] invalid assign', 0, ERR_SRVO)
+        ABORT
+    ENDIF
+	
+    -- Initialize byte array to zero
+    FOR index_byte = 1 TO 4 DO
+        byte_arr[index_byte] = 0
+        -- Extract each bit from DIN and combine into bytes
+        FOR index_bit = 1 TO 8 DO
+            io_addr = io_start + (index_byte - 1)*8 + (index_bit - 1)
+            IF DIN[io_addr] THEN
+                -- Set bit in byte according to bit position (LSB is bit 1)
+                byte_arr[index_byte] = byte_arr[index_byte] + POW2(index_bit - 1)
+            ENDIF
+        ENDFOR
+    ENDFOR
+
+    -- Convert 4-byte array to REAL using given endianess
+    CNV_BYTE2REL(byte_arr, is_little, real_val)
+END GI32
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : GO32
+-- Function  : Output a REAL (float) value as 32 bits over DOUT IO lines (supports endian selection).
+-- Parameters:
+--   io_start [IN]  : Start IO address for 32 bits output (DOUT).
+--   io_end   [IN]  : End IO address for 32 bits output (must be io_start + 31).
+--   is_little[IN]  : Boolean flag for endian format:
+--                    TRUE  = little endian (LSB byte first),
+--                    FALSE = big endian (MSB byte first).
+--   real_val [IN]  : REAL float value to convert and output.
+-- Return    : None.
+--
+-- Author    : Zhao,Mengkang
+-- Date      : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE GO32(io_start:INTEGER; io_end:INTEGER; is_little:BOOLEAN; real_val:REAL)
+VAR
+    index_byte : INTEGER            -- Byte index (1..4)
+    index_bit  : INTEGER            -- Bit index within byte (1..8)
+    byte_arr   : ARRAY[4] OF BYTE  -- 4 bytes representation of float
+    bits       : ARRAY[8] OF INTEGER -- Bits array for one byte (MSB=bits[1], LSB=bits[8])
+    sta        : INTEGER            -- IO allocation status check
+    io_indexi  : INTEGER            -- IO index iterator
+BEGIN
+    -- Check input parameters initialization
+    IF UNINIT(io_start) THEN POST_ERR(38092,'[GO32] io_start not initialized',0,ERR_SRVO); ABORT; ENDIF
+    IF UNINIT(io_end) THEN POST_ERR(38092,'[GO32] io_end not initialized',0,ERR_SRVO); ABORT; ENDIF
+    IF UNINIT(real_val) THEN POST_ERR(38092,'[GO32] real_val not initialized',0,ERR_SRVO); ABORT; ENDIF
+    IF UNINIT(is_little) THEN POST_ERR(38092,'[GO32] is_little not initialized',0,ERR_SRVO); ABORT; ENDIF
+
+    -- Validate IO length must be exactly 32 bits
+    IF (io_end - io_start + 1) <> 32 THEN
+        POST_ERR(38092,'[GO32] IO length is not 32 bits',0,ERR_SRVO)
+        RETURN
+    ENDIF
+
+    -- Check that all corresponding DOUT IO ports are unassigned and available
+    io_indexi = io_start
+    REPEAT
+        GET_PORT_ASG(2, io_indexi, 0, 0, 0, 0, 0, sta)  -- 2 = DOUT
+        IF sta = 0 THEN
+            io_indexi = io_indexi + 1
+        ENDIF
+    UNTIL (sta <> 0) OR (io_indexi > io_end)
+    
+    IF sta <> 0 THEN
+        POST_ERR(38092, '[GO32] DO[' + CNV_INT2STR(io_indexi) + '] invalid assign', 0, ERR_SRVO)
+        ABORT
+    ENDIF
+
+    -- Convert REAL to 4-byte array, respecting endian flag
+    CNV_REL2BYTE(real_val, is_little, byte_arr)
+    -- For each byte, split into bits and output to corresponding DOUT bits
+    FOR index_byte = 1 TO 4 DO
+		CNV_BYTE2BIT((byte_arr[index_byte]), bits)
+	    FOR index_bit = 1 TO 8 DO
+	        IF bits[9 - index_bit] <> 0 THEN
+	            DOUT[io_start + (index_bit - 1) + 8*(index_byte - 1)] = ON
+	        ELSE
+	            DOUT[io_start + (index_bit - 1) + 8*(index_byte - 1)] = OFF
+	        ENDIF
+	    ENDFOR
+	ENDFOR 
+END GO32
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : SHL
+-- Function  : Arithmetic left shift. Shifts value bits to the left by n positions (fills in low bits with 0).
+-- Param
+--   val[IN] : INTEGER, input value to shift.
+--   n[IN]   : INTEGER, number of bits to shift (n >= 0).
+-- Return    : INTEGER, shifted result.
+-- Author    : Zhao,Mengkang
+-- Date      : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE SHL(val:INTEGER; n:INTEGER):INTEGER
+VAR
+    i, res:INTEGER
+BEGIN
+    res = val
+    IF n > 0 THEN
+        FOR i = 1 TO n DO
+            res = res * 2
+        ENDFOR
+    ENDIF
+    RETURN(res)
+END SHL
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : SHR
+-- Function  : Arithmetic right shift. Shifts value bits to the right by n positions (fills in high bits with 0).
+-- Param
+--   val[IN] : INTEGER, input value to shift.
+--   n[IN]   : INTEGER, number of bits to shift (n >= 0).
+-- Return    : INTEGER, shifted result.
+-- Author    : Zhao,Mengkang
+-- Date      : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE SHR(val:INTEGER; n:INTEGER):INTEGER
+VAR
+    i, res:INTEGER
+BEGIN
+    res = val
+    IF n > 0 THEN
+        FOR i = 1 TO n DO
+            res = res DIV 2  
+        ENDFOR
+    ENDIF
+    RETURN(res)
+END SHR
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : XOR_FUNC
+-- Function  : XOR operation for two integers (0~65535), returns a XOR b.
+-- Param
+--   a[IN], b[IN] : Input integers
+-- Return  : (a XOR b)
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE XOR_FUNC(a:INTEGER; b:INTEGER):INTEGER
+VAR
+    r:INTEGER
+BEGIN
+    -- XOR: (a OR b) AND NOT(a AND b)
+    r = (a OR b) AND (NOT(a AND b))
+    RETURN(r)
+END XOR_FUNC
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : MODBUS_CRC16
+-- Function  : Calculate Modbus RTU CRC16 checksum for an input byte array.
+-- Param
+--   data[IN] : ARRAY OF BYTE, input frame.
+--   len[IN]  : INTEGER, actual length of data to check.
+--   crc[OUT] : INTEGER, output CRC16 value (little-endian: low byte first).
+-- Return  : None
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE MODBUS_CRC16(data: ARRAY OF BYTE; len: INTEGER; crc: INTEGER)
+VAR
+    i, j  : INTEGER
+    temp  : INTEGER
+BEGIN
+    crc = 65535      -- 0xFFFF, initial value
+
+    FOR i = 1 TO len DO
+        crc = XOR_FUNC(crc, (data[i]))
+        FOR j = 1 TO 8 DO
+            IF (crc MOD 2) <> 0 THEN                 -- If LSB is 1
+                crc = crc DIV 2
+                crc = XOR_FUNC(crc, 40961)           -- 0xA001
+            ELSE
+                crc = crc DIV 2
+            ENDIF
+        ENDFOR
+    ENDFOR
+    -- CRC is always unsigned, ensure it positive (if system INTEGER can be negative)
+    IF crc < 0 THEN
+        crc = crc + 65536
+    ENDIF
+END MODBUS_CRC16
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : E_SPLIT
+-- Function  : Split a string by delimiter and optionally skip control characters.
+-- Param
+--   in_str[in]      : Input string to split.
+--   split_str[in]   : Delimiter string, must be single char.
+--   no_ctrl_code[in]: If TRUE, skip ASCII control codes.
+--   out[out]        : Output string array, split result.
+--   count[out]      : Output, number of segments found.
+-- Return   : 0=ok, <0 error code.
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE E_SPLIT(
+			in_str:STRING;
+			split_str:STRING;
+			no_ctrl_code:BOOLEAN;
+			out:ARRAY OF STRING;
+			count:INTEGER):INTEGER
+VAR
+indexi      :INTEGER
+arr_len     :INTEGER
+s_str       :STRING[1]
+c_str       :STRING[254]
+temp        :STRING[254]
+str_lenth   :INTEGER
+BEGIN
+    count = 0
+    arr_len = ARRAY_LEN(out)
+    -- Check parameter
+    IF(arr_len = 0) THEN RETURN(-1);ENDIF
+    IF(UNINIT(in_str))THEN RETURN(-2);ENDIF
+    IF(UNINIT(split_str))THEN RETURN(-3);ENDIF
+    IF(UNINIT(no_ctrl_code))THEN RETURN(-4);ENDIF
+    IF(STR_LEN(in_str) = 0)THEN RETURN(-5);ENDIF
+    IF(STR_LEN(split_str) = 0)THEN RETURN(-6);ENDIF
+            
+    -- init temp var
+    s_str = ''
+    c_str = ''
+    temp= in_str  
+    FOR indexi = 1 TO arr_len DO
+        out[indexi] = ''
+    ENDFOR
+    FOR indexi = 1 TO STR_LEN(in_str) DO
+        s_str = SUB_STR(temp,indexi,1)  
+        IF(no_ctrl_code) AND ((ORD(s_str,1) < 32) OR (ORD(s_str,1) = 127)) THEN
+        ELSE
+            IF(s_str <> split_str)THEN
+                c_str = c_str + s_str
+            ELSE
+                count = count + 1
+                out[count] = c_str
+                c_str = ''
+                s_str = ''
+                IF(count > arr_len)THEN RETURN(-6);ENDIF
+            ENDIF
+        ENDIF          
+    ENDFOR
+    count = count + 1
+    out[count] = c_str
+    RETURN(0)
+END E_SPLIT
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : E_SPLIT_ARR
+-- Function  : Split all strings in input array by delimiter, optionally skipping ASCII control characters.
+-- Param
+--   in_arr[IN]      : Input string array.
+--   arr_len[IN]     : Number of elements in input array.
+--   split_str[IN]   : Delimiter string, must be a single character.
+--   no_ctrl_code[IN]: If TRUE, skip ASCII control characters.
+--   out_arr[OUT]    : Output string array to store split segments.
+--   count[OUT]      : Output, total number of split segments.
+-- Return  : 0 = OK, <0 = error code.
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE E_SPLIT_ARR(
+    in_arr      : ARRAY OF STRING;
+    arr_len     : INTEGER;
+    split_str   : STRING;
+    no_ctrl_code: BOOLEAN;
+    out_arr     : ARRAY OF STRING;
+    count       : INTEGER):INTEGER
+VAR
+    arr_idx    : INTEGER          -- input array index
+    chr_idx    : INTEGER          -- char index in string
+    out_idx    : INTEGER          -- output array index
+    seg        : STRING[254]      -- current segment
+    c          : STRING[1]
+    s          : STRING[254]
+    curr_len   : INTEGER
+BEGIN
+    count = 0
+    out_idx = 0
+    IF (arr_len <= 0) THEN RETURN(-1); ENDIF
+    IF UNINIT(split_str) OR (STR_LEN(split_str)=0) THEN RETURN(-2); ENDIF
+    IF ARRAY_LEN(out_arr) <= 0 THEN RETURN(-3); ENDIF
+    seg = ''
+
+    FOR arr_idx = 1 TO arr_len DO
+        IF UNINIT(in_arr[arr_idx]) = FALSE THEN
+            s = in_arr[arr_idx]
+            curr_len = STR_LEN(s)
+            FOR chr_idx = 1 TO curr_len DO
+                c = SUB_STR(s, chr_idx, 1)
+                -- Skip control code if required
+                IF no_ctrl_code AND ((ORD(c,1) < 32) OR (ORD(c,1) = 127)) THEN
+                    -- do nothing, skip
+                ELSE
+                    IF c = split_str THEN
+                        out_idx = out_idx + 1
+                        IF out_idx > ARRAY_LEN(out_arr) THEN RETURN(-4); ENDIF
+                        out_arr[out_idx] = seg
+                        seg = ''
+                    ELSE
+                        IF STR_LEN(seg) < 254 THEN
+                            seg = seg + c
+                        ELSE
+                            RETURN(-5) -- One segment too long
+                        ENDIF
+                    ENDIF
+                ENDIF
+            ENDFOR
+        ENDIF
+    ENDFOR
+    -- Add the last segment (even if empty)
+    IF(out_idx <> 0)THEN
+    	out_idx = out_idx + 1
+    ENDIF
+    IF out_idx > ARRAY_LEN(out_arr) THEN RETURN(-4); ENDIF
+    
+    IF(out_idx > 0)THEN
+	    out_arr[out_idx] = seg
+	    count = out_idx
+    ENDIF
+    RETURN(0)
+END E_SPLIT_ARR
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : TO_UPPER
+-- Function  : Convert all lower-case letters in input string to upper-case.
+-- Param
+--   in_str[IN]   : Input string.
+--   out_str[OUT] : Output string with all lower-case letters converted to upper-case.
+-- Return  : None
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE TO_UPPER(in_str: STRING; out_str: STRING)
+VAR
+    i : INTEGER
+    c : STRING[1]
+BEGIN
+    out_str = ''
+    FOR i = 1 TO STR_LEN(in_str) DO
+        c = SUB_STR(in_str, i, 1)
+        IF (ORD(c,1)>=97) AND (ORD(c,1)<=122) THEN
+            out_str = out_str + CHR(ORD(c,1)-32)
+        ELSE
+            out_str = out_str + c
+        ENDIF
+    ENDFOR
+END TO_UPPER
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : TO_LOWER
+-- Function  : Convert all upper-case letters in input string to lower-case.
+-- Param
+--   in_str[IN]   : Input string.
+--   out_str[OUT] : Output string with all upper-case letters converted to lower-case.
+-- Return  : None
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE TO_LOWER(in_str: STRING; out_str: STRING)
+VAR
+    i : INTEGER
+    c : STRING[1]
+BEGIN
+    out_str = ''
+    FOR i = 1 TO STR_LEN(in_str) DO
+        c = SUB_STR(in_str, i, 1)
+        IF (ORD(c,1)>=65) AND (ORD(c,1)<=90) THEN
+            out_str = out_str + CHR(ORD(c,1)+32)
+        ELSE
+            out_str = out_str + c
+        ENDIF
+    ENDFOR
+END TO_LOWER
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : REPLACE
+-- Function  : Replace all occurrences of a sub-string (old_pat) with another (new_pat) in input string.
+-- Param
+--   in_str[IN]     : Input string.
+--   old_pat[IN]    : Sub-string to search for and replace.
+--   new_pat[IN]    : String to replace with.
+--   out_str[OUT]   : Output string after replacements.
+-- Return  : None
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE REPLACE(in_str: STRING; old_pat: STRING; new_pat: STRING; out_str: STRING)
+VAR
+    i         : INTEGER
+    idx       : INTEGER
+    len_in    : INTEGER
+    len_old   : INTEGER
+    seg       : STRING[254]
+BEGIN
+    out_str = ''
+    i = 1
+    len_in = STR_LEN(in_str)
+    len_old = STR_LEN(old_pat)
+    WHILE i <= len_in DO
+        IF (len_old>0) AND (i+len_old-1 <= len_in) AND (SUB_STR(in_str, i, len_old) = old_pat) THEN
+            out_str = out_str + new_pat
+            i = i + len_old
+        ELSE
+            out_str = out_str + SUB_STR(in_str, i, 1)
+            i = i + 1
+        ENDIF
+    ENDWHILE
+END REPLACE
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : CNV_INT2HEX
+-- Function  : Convert a non-negative integer value to an uppercase hexadecimal string (without '0x' prefix).
+-- Param
+--   val[IN]      : Integer value (>= 0).
+--   out_str[OUT] : Output string representing value in uppercase hexadecimal.
+-- Return  : None
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE CNV_INT2HEX(val: INTEGER; out_str: STRING)
+VAR
+    hex_digits : STRING[16]    -- Characters for 0-9, A-F
+    tmp        : STRING[32]    -- Temporary string to build hex value (in reverse)
+    n          : INTEGER       -- Working value
+    remainder  : INTEGER
+BEGIN
+    hex_digits = '0123456789ABCDEF'
+    tmp = ''
+    n = val
+    IF n = 0 THEN
+        out_str = '0'
+        RETURN
+    ENDIF
+    WHILE n > 0 DO
+        remainder = n MOD 16
+        -- Prepend the corresponding hex digit to tmp
+        tmp = SUB_STR(hex_digits, remainder+1, 1) + tmp
+        n = n DIV 16      -- Integer division
+    ENDWHILE
+    out_str = tmp
+END CNV_INT2HEX
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : EXTR_BLOCK
+-- Function  : Extract the first occurrence of a substring between start and end tags, supporting nested structure.
+-- Param
+--   src_str[IN]   : Source string.
+--   start_tag[IN] : Start tag (e.g. <ROBOT>).
+--   end_tag[IN]   : End tag   (e.g. </ROBOT>).
+--   content[OUT]  : Extracted content between start_tag and end_tag (without tags).
+-- Return  : 0=OK, <0=error (e.g. not found).
+-- Author  : Zhao,Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE EXTR_BLOCK(src_str:STRING; start_tag:STRING; end_tag:STRING; content:STRING):INTEGER
+VAR
+    start_pos   :INTEGER    -- Start tag position (in full string)
+    end_pos     :INTEGER    -- End tag position (in full string)
+    curr_pos    :INTEGER
+    nest        :INTEGER
+    substr      :STRING[254]
+    i           :INTEGER
+    j           :INTEGER
+    rel_pos     :INTEGER
+    s_len       :INTEGER
+    e_len       :INTEGER
+    tmp_str     :STRING[254]
+BEGIN
+    content = ''
+    IF UNINIT(src_str) OR UNINIT(start_tag) OR UNINIT(end_tag) THEN RETURN(-1); ENDIF
+    IF STR_LEN(src_str) = 0 THEN RETURN(-2); ENDIF
+    s_len = STR_LEN(start_tag)
+    e_len = STR_LEN(end_tag)
+    -- Find the first start_tag position
+    start_pos = INDEX(src_str, start_tag)
+    IF start_pos = 0 THEN RETURN(-10); ENDIF
+    -- Set search position after first start_tag
+    curr_pos = start_pos + s_len
+    nest = 1
+    WHILE nest > 0 DO
+        -- Take substring from curr_pos to end
+        substr = SUB_STR(src_str, curr_pos, STR_LEN(src_str) - curr_pos + 1)
+        -- Search start_tag and end_tag in substr
+        i = INDEX(substr, start_tag)
+        j = INDEX(substr, end_tag)
+        IF j = 0 THEN RETURN(-20); ENDIF -- end_tag not found
+        IF (i <> 0) AND (i < j) THEN
+            -- Nested start_tag found before end_tag
+            nest = nest + 1
+            curr_pos = curr_pos + i - 1 + s_len
+        ELSE
+            -- end_tag found first
+            nest = nest - 1
+            IF nest = 0 THEN
+                end_pos = curr_pos + j - 2   -- End at first char of end_tag
+            ELSE
+                curr_pos = curr_pos + j - 1 + e_len
+            ENDIF
+        ENDIF
+    ENDWHILE
+    -- content: from start_pos + s_len to end_pos
+    content = SUB_STR(src_str, start_pos + s_len, end_pos - (start_pos + s_len) + 1)
+    RETURN(0)
+END EXTR_BLOCK
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : EXTR_B_ARR
+-- Function  : Extracts the content between the first occurrence of start_tag and end_tag
+--             (supports nested tags), from a string array.
+--             For long blocks, splits output into multiple lines (254 chars per line).
+-- Parameters:
+--   in_arr   [IN]  : Source string array (multi-line, e.g., lines from a file), STRING[254] type.
+--   arr_len  [IN]  : Number of elements in in_arr.
+--   start_tag[IN]  : Start tag string (e.g., <ROOT>).
+--   end_tag  [IN]  : End tag string (e.g., </ROOT>).
+--   out_arr  [OUT] : Output string array, content between tags. Each element up to 254 chars.
+--   out_cnt  [OUT] : Output. Number of valid lines in out_arr.
+-- Return:
+--   0  = OK
+--   <0 = Error code (e.g., tag not found, output overflow)
+-- Notes:
+--   - Only the first (outermost) tag block is extracted.
+--   - Block content can span multiple input lines and will be split by 254 chars in the output.
+--   - Nested tags are properly supported; only the innermost when matching decreases to zero is considered end.
+-- Author  : Zhao, Mengkang
+-- Date    : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE EXTR_B_ARR(
+    in_arr    : ARRAY OF STRING;
+    arr_len   : INTEGER;
+    start_tag : STRING;
+    end_tag   : STRING;
+    out_arr   : ARRAY OF STRING;
+    out_cnt   : INTEGER):INTEGER
+VAR
+    i, bpos, seg_len : INTEGER
+    s, chunk         : STRING[254]
+    in_block         : BOOLEAN
+    nest             : INTEGER
+    st_len           : INTEGER
+    en_len           : INTEGER
+    found            : BOOLEAN
+BEGIN
+    out_cnt = 0
+    in_block = FALSE
+    nest = 0
+    st_len = STR_LEN(start_tag)
+    en_len = STR_LEN(end_tag)
+    chunk = ''
+    found = FALSE
+
+    FOR i = 1 TO arr_len DO
+        IF UNINIT(in_arr[i]) = FALSE THEN
+            s = in_arr[i]
+            bpos = 1
+            WHILE bpos <= STR_LEN(s) DO
+
+                -- Check for the first start_tag (begin extraction)
+                IF (in_block = FALSE) AND (bpos + st_len - 1 <= STR_LEN(s)) AND (SUB_STR(s, bpos, st_len) = start_tag) THEN
+                    nest = 1
+                    in_block = TRUE
+                    bpos = bpos + st_len
+
+                ELSE
+                    -- If already within block, check for nested start_tag
+                    IF (in_block = TRUE) AND (bpos + st_len - 1 <= STR_LEN(s)) AND (SUB_STR(s, bpos, st_len) = start_tag) THEN
+                        nest = nest + 1
+                        -- Append the nested start_tag to chunk
+                        IF STR_LEN(chunk) + st_len <= 254 THEN
+                            chunk = chunk + start_tag
+                        ELSE
+                            out_cnt = out_cnt + 1
+                            IF out_cnt > ARRAY_LEN(out_arr) THEN RETURN(-30); ENDIF
+                            out_arr[out_cnt] = chunk
+                            chunk = start_tag
+                        ENDIF
+                        bpos = bpos + st_len
+
+                    ELSE
+                        -- Within block, check for end_tag
+                        IF (in_block = TRUE) AND (bpos + en_len - 1 <= STR_LEN(s)) AND (SUB_STR(s, bpos, en_len) = end_tag) THEN
+                            nest = nest - 1
+                            IF nest = 0 THEN
+                                -- End of the outermost block: flush chunk and finish
+                                IF STR_LEN(chunk) > 0 THEN
+                                    out_cnt = out_cnt + 1
+                                    IF out_cnt > ARRAY_LEN(out_arr) THEN RETURN(-40); ENDIF
+                                    out_arr[out_cnt] = chunk
+                                ENDIF
+                                in_block = FALSE
+                                found = TRUE
+                                RETURN(0)
+                            ELSE
+                                -- Within a nested block, append end_tag as content
+                                IF STR_LEN(chunk) + en_len <= 254 THEN
+                                    chunk = chunk + end_tag
+                                ELSE
+                                    out_cnt = out_cnt + 1
+                                    IF out_cnt > ARRAY_LEN(out_arr) THEN RETURN(-41); ENDIF
+                                    out_arr[out_cnt] = chunk
+                                    chunk = end_tag
+                                ENDIF
+                            ENDIF
+                            bpos = bpos + en_len
+                        ELSE
+                            -- Add plain content within the block
+                            IF in_block = TRUE THEN
+                                IF STR_LEN(chunk) < 254 THEN
+                                    chunk = chunk + SUB_STR(s, bpos, 1)
+                                ELSE
+                                    out_cnt = out_cnt + 1
+                                    IF out_cnt > ARRAY_LEN(out_arr) THEN RETURN(-50); ENDIF
+                                    out_arr[out_cnt] = chunk
+                                    chunk = SUB_STR(s, bpos, 1)
+                                ENDIF
+                            ENDIF
+                            bpos = bpos + 1
+                        ENDIF
+                    ENDIF
+                ENDIF
+
+            ENDWHILE
+        ENDIF
+    ENDFOR
+    -- If block end is never found, return error
+    IF found = FALSE THEN
+        RETURN(-100)
+    ENDIF
+
+    RETURN(0)
+END EXTR_B_ARR
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : SM_TAGCHK
+-- Function  : Check and standardize socket tag, convert to upper-case, must be "C1:"~"C8:" or "S1:"~"S8:"
+-- Param
+--   tag_nam[IN/OUT]: Socket tag name to check and fix
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE SM_TAGCHK(tag_nam:STRING)
+VAR
+temp_tag    :STRING[3]
+BEGIN    
+    IF(STR_LEN(tag_nam) <> 3)THEN
+        POST_ERR(38092,'[SM_TAGCHK]tag_nam<'+ tag_nam +'>is invalid',0,ERR_SRVO)
+        ABORT
+    ENDIF    
+    
+    IF((SUB_STR(tag_nam,1,1) = 'C') OR (SUB_STR(tag_nam,1,1) = 'c'))AND
+        (ORD(tag_nam,2)>=49) AND (ORD(tag_nam,2)<=56)AND
+        (SUB_STR(tag_nam,3,1) = ':')THEN        
+        temp_tag = 'C' + SUB_STR(tag_nam,2,1) + ':'
+    ELSE
+        IF((SUB_STR(tag_nam,1,1) = 'S') OR (SUB_STR(tag_nam,1,1) = 's'))AND
+            (ORD(tag_nam,2)>=49) AND (ORD(tag_nam,2)<=56)AND
+            (SUB_STR(tag_nam,3,1) = ':')THEN
+            temp_tag = 'S' + SUB_STR(tag_nam,2,1) + ':'
+        ELSE
+            POST_ERR(38092,'[SM_TAGCHK]tag_nam<'+ tag_nam +'>is invalid',0,ERR_SRVO)
+            ABORT
+        ENDIF
+    ENDIF    
+    tag_nam = temp_tag
+END SM_TAGCHK
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : SM_CONFIG
+-- Function  : Socket Parameter Auto-Configuration
+-- Param
+--   tag_nam[in]: Socket tag name, e.g., 'C2:'
+--   ip_addr[in]: IP Address
+--   port[in]   : Port number
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE SM_CONFIG(tag_nam:STRING;ip_addr:STRING;port:INTEGER)
+VAR
+sys_var     :STRING[254]
+entry       :INTEGER
+BEGIN
+    -- Check Param
+    IF UNINIT(tag_nam) THEN POST_ERR(38092,'[SM_CONFIG]tag_nam not init',0,ERR_SRVO);ABORT;ENDIF
+    IF UNINIT(ip_addr) THEN POST_ERR(38092,'[SM_CONFIG]ip_addr not init',0,ERR_SRVO);ABORT;ENDIF
+    IF UNINIT(port) THEN POST_ERR(38092,'[SM_CONFIG]port not init',0,ERR_SRVO);ABORT;ENDIF
+    
+    -- Tag  
+    SM_TAGCHK(tag_nam)
+    
+    -- Client
+    IF(SUB_STR(tag_nam,1,1) = 'C')THEN
+        sys_var = '$HOSTC_CFG[' + SUB_STR(tag_nam,2,1)  + ']'
+    ENDIF
+    
+    -- Server
+    IF(SUB_STR(tag_nam,1,1) = 'S')THEN
+        sys_var = '$HOSTS_CFG[' + SUB_STR(tag_nam,2,1)  + ']'    
+    ENDIF
+    
+    -- IP Address
+    SET_VAR(entry,'*SYSTEM*',sys_var + '.$STRT_REMOTE',ip_addr,0)
+    SET_VAR(entry,'*SYSTEM*',sys_var + '.$STATE',1,0)
+    SET_VAR(entry,'*SYSTEM*',sys_var + '.$OPER',3,0)
+    
+    -- Port
+    SET_VAR(entry,'*SYSTEM*',sys_var + '.$SERVER_PORT',port,0)
+    SET_VAR(entry,'*SYSTEM*',sys_var + '.$PORT','',0)
+    
+    -- Socket Protocol
+    SET_VAR(entry,'*SYSTEM*',sys_var + '.$PROTOCOL','SM',0)
+    
+    -- Defined
+    SET_VAR(entry,'*SYSTEM*',sys_var + '.$STATE',2,0)
+    
+    DELAY 10
+    
+    -- Start 
+    SET_VAR(entry,'*SYSTEM*',sys_var + '.$STATE',3,0)
+    
+    -- Need re-power
+    POST_ERR(38092,'Please execute cold start',0,ERR_MSG)
+    
+    -- Prompt RE-Power Window
+    -- FORCE_LINK(TP_PANEL,'/softpart/genlink?current=fctnmenu,20,11')
+    
+END SM_CONFIG
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : SM_PING
+-- Function  : Ping target via tag name.
+-- Param
+--   tag_nam[in]: Socket tag name, e.g., 'C2:'
+-- Return   : Ping status, 0=OK, !=0=error
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE SM_PING(tag_nam:STRING):INTEGER
+VAR
+sys_var     :STRING[254]
+ip_addr     :STRING[20]
+status      :INTEGER
+entry       :INTEGER
+BEGIN
+        
+    -- Tag    
+    SM_TAGCHK(tag_nam)
+    
+    -- Client
+    IF(SUB_STR(tag_nam,1,1) = 'C')THEN
+        sys_var = '$HOSTC_CFG[' + SUB_STR(tag_nam,2,1)  + ']'
+    ENDIF
+    
+    -- Server
+    IF(SUB_STR(tag_nam,1,1) = 'S')THEN
+        sys_var = '$HOSTS_CFG[' + SUB_STR(tag_nam,2,1)  + ']'    
+    ENDIF
+    
+    -- Ping
+    GET_VAR(entry,'*SYSTEM*',sys_var + '.$STRT_REMOTE',ip_addr,0)
+    
+    IF(UNINIT(ip_addr))THEN POST_ERR(38092,'[SM_PING]'+tag_nam + 'not config',0,ERR_SRVO);ABORT;ENDIF
+    MSG_PING(ip_addr,status)
+    RETURN(status)
+
+END SM_PING
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : SM_DISCON
+-- Function  : Disconnect socket by tag name.
+-- Param
+--   tag_nam[in]: Socket tag name, e.g., 'C2:'
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE SM_DISCON(tag_nam:STRING)
+VAR
+status      :INTEGER
+BEGIN
+    -- Tag    
+    SM_TAGCHK(tag_nam)
+    MSG_DISCO(tag_nam,0)
+END SM_DISCON
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : SM_CONNECT
+-- Function  : Ping then connect socket by tag name.
+-- Param
+--   tag_nam[in]: Socket tag name, e.g., 'C2:'
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE SM_CONNECT(tag_nam:STRING)
+VAR
+status      :INTEGER
+
+BEGIN    
+    -- Ping
+    status = SM_PING(tag_nam)
+    IF(status <> 0)THEN POST_ERR(38092,'[SM_CONNECT]Ping<'+ tag_nam +'> timeout',0,ERR_SRVO);ABORT;ENDIF
+    
+    -- Disconnect
+    MSG_DISCO(tag_nam,0)
+    
+    DELAY 100
+    
+    -- Connect
+    WRITE TPERROR(CHR(128),CHR(137)) 
+    WRITE TPERROR('[SM_CONNECT]'+tag_nam+' Connecting...')
+    MSG_CONNECT(tag_nam,status)    
+    WRITE TPERROR(CHR(128),CHR(137))   
+END SM_CONNECT
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : SM_INIT
+-- Function  : Initialize a socket/file for comm.
+-- Param
+--   sm_file[in/out]: FILE variable to initialize.
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE SM_INIT(sm_file:FILE)
+BEGIN
+    CLOSE FILE sm_file
+    SET_FILE_ATR(sm_file,ATR_IA)
+    SET_FILE_ATR(sm_file,ATR_READAHD,2)
+    CLR_IO_STAT(sm_file)
+END SM_INIT
+
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : SM_SEND
+-- Function  : Send data to socket.
+-- Param
+--   tag_nam[in] : Socket tag name, e.g., 'C2:'
+--   sm_file[in] : FILE variable for communication.
+--   data[in]    : Data to send.
+-- Return   : Socket status, 0=OK, !=0=error
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE SM_SEND(tag_nam:STRING;sm_file:FILE;data:STRING):INTEGER
+VAR
+file_sta    :INTEGER
+BEGIN
+    SM_INIT(sm_file)
+    SM_TAGCHK(tag_nam)
+    
+    OPEN FILE sm_file('RW',tag_nam)
+    file_sta = IO_STATUS(sm_file)
+    IF(file_sta <> 0)THEN RETURN(file_sta);ENDIF
+    
+    WRITE sm_file(data)
+    file_sta = IO_STATUS(sm_file)
+    
+    CLOSE FILE sm_file
+    RETURN(file_sta)
+END SM_SEND
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : SM_RECV
+-- Function  : Receive data from socket.
+-- Param
+--   tag_nam[in]     : Socket tag name, e.g., 'C2:'
+--   sm_file[in]     : FILE variable used for comm.
+--   data[out]       : Received data, STRING[254]
+--   remain_data[out]: Remain data size (bytes)
+--   timeout[in]     : Receive timeout(ms), 0 for infinite
+-- Return   : Socket status, 0=OK, !=0=error.
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE SM_RECV(tag_nam:STRING;sm_file:FILE;data:STRING;remain_data:INTEGER;timeout:INTEGER):INTEGER
+VAR
+file_sta    :INTEGER
+s_str       :STRING[127]
+c_str       :STRING[254]
+BEGIN
+    -- Check parm
+    SM_TAGCHK(tag_nam)
+    IF(UNINIT(timeout)) THEN POST_ERR(38092,'[SM_RECV]timeout not init',0,ERR_SRVO);ABORT;ENDIF
+    IF(timeout < 0)THEN POST_ERR(38092,'[SM_RECV]timeout < 0',0,ERR_SRVO);ABORT;ENDIF
+    
+    -- Init file
+    SM_INIT(sm_file)
+        
+    c_str = ''
+    s_str = ''
+    data  = ''
+    remain_data = 0
+    
+    -- Open
+    OPEN FILE sm_file('RW',tag_nam)
+    
+    -- Timer
+    DISCONNECT TIMER g_timer1
+    g_timer1 = 0
+    IF(timeout > 0)THEN   
+    	CONNECT TIMER TO g_timer1
+    ENDIF
+    
+    -- Waiting send data
+    REPEAT
+        file_sta = IO_STATUS(sm_file)
+        IF(file_sta <> 0)THEN 
+            DISCONNECT TIMER g_timer1
+            RETURN(file_sta)
+        ENDIF
+        BYTES_AHEAD(sm_file,remain_data,file_sta)
+        IF(file_sta <> 0)THEN
+            remain_data = 0
+        ENDIF
+        
+        DELAY 20              
+        IF (g_timer1 > timeout)AND ((timeout <> 0)) THEN
+            POST_ERR(38092,'[SM_RECV]Recive data timeout',0,ERR_SRVO)
+            ABORT
+        ENDIF
+    UNTIL (remain_data > 0) OR (file_sta <> 0) 
+    DISCONNECT TIMER g_timer1
+    
+    -- Host error
+    IF(file_sta <> 0 )THEN
+        RETURN(file_sta)
+    ENDIF
+    
+    -- Read data
+    REPEAT
+        IF (remain_data >= 127) THEN
+            READ sm_file(s_str::127)
+            file_sta = IO_STATUS(sm_file)
+            IF (file_sta = 0) THEN
+                c_str = c_str + s_str
+                remain_data = remain_data - 127
+            ENDIF
+        ELSE
+            READ sm_file(s_str::remain_data)
+            file_sta = IO_STATUS(sm_file)
+            IF (file_sta = 0) THEN
+                c_str = c_str + s_str
+                remain_data = 0
+            ENDIF
+        ENDIF
+    UNTIL (STR_LEN(c_str)>= 254) OR (file_sta <> 0) OR (remain_data = 0)
+    
+    -- Output data
+    IF(file_sta = 0)THEN data = c_str;ENDIF
+    
+    CLOSE FILE sm_file
+    RETURN (file_sta)
+END SM_RECV
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : GET_INT_PARM
+-- Function  : Get TPE or macro parameter (integer).
+-- Param
+--   param_no[in]  : Parameter number (index).
+--   param_val[out): Received integer result.
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE GET_INT_PARM(param_no:INTEGER;param_val:INTEGER)
+VAR
+data_type   :INTEGER
+int_value   :INTEGER
+status      :INTEGER
+BEGIN
+    IF(UNINIT(param_no))THEN POST_ERR(38092,'[GET_INT_PARM]param_no not init',0,ERR_SRVO);ABORT;ENDIF
+    GET_TPE_PRM(param_no,data_type,int_value,0,'',status)
+    IF(status <> 0)THEN
+        POST_ERR(38092,'Parm<'+ CNV_INT2STR(param_no)+'>does not exist.',0,ERR_SRVO);ABORT
+    ENDIF
+    IF(data_type <> 1)THEN
+        POST_ERR(38092,'Parm<'+ CNV_INT2STR(param_no)+'>type not int.',0,ERR_SRVO);ABORT
+    ENDIF 
+    param_val = int_value        
+END GET_INT_PARM
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : GET_REL_PARM
+-- Function  : Get TPE or macro parameter (real/float).
+-- Param
+--   param_no[in]  : Parameter number (index).
+--   param_val[out]: Received real result.
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE GET_REL_PARM(param_no:INTEGER;param_val:REAL)
+VAR
+data_type   :INTEGER
+real_value  :REAL
+int_value	:INTEGER
+status      :INTEGER
+BEGIN
+    IF(UNINIT(param_no))THEN POST_ERR(38092,'[GET_REL_PARM]param_no not init',0,ERR_SRVO);ABORT;ENDIF
+    GET_TPE_PRM(param_no,data_type,int_value,real_value,'',status)
+    IF(status <> 0)THEN
+        POST_ERR(38092,'Parm<'+ CNV_INT2STR(param_no)+'>does not exist.',0,ERR_SRVO);ABORT
+    ENDIF
+    IF(data_type <> 2) AND (data_type <> 1)THEN
+        POST_ERR(38092,'Parm<'+ CNV_INT2STR(param_no)+'>type not real/int.',0,ERR_SRVO);ABORT
+    ENDIF 
+    IF(data_type = 1)THEN
+    	real_value = int_value
+    ENDIF
+    param_val = real_value        
+END GET_REL_PARM
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : GET_STR_PARM
+-- Function  : Get TPE or macro parameter (string).
+-- Param
+--   param_no[in]  : Parameter number (index).
+--   param_val[out]: Received string result.
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE GET_STR_PARM(param_no:INTEGER;param_val:STRING)
+VAR
+data_type   :INTEGER
+str_value   :STRING[254]
+status      :INTEGER
+BEGIN
+    IF(UNINIT(param_no))THEN POST_ERR(38092,'[GET_STR_PARM]param_no not init',0,ERR_SRVO);ABORT;ENDIF
+    GET_TPE_PRM(param_no,data_type,0,0,str_value,status)
+    IF(status <> 0)THEN
+        POST_ERR(38092,'Parm<'+ CNV_INT2STR(param_no)+'>does not exist.',0,ERR_SRVO);ABORT
+    ENDIF
+    IF(data_type <> 3)THEN
+        POST_ERR(38092,'Parm<'+ CNV_INT2STR(param_no)+'>type not str.',0,ERR_SRVO);ABORT
+    ENDIF    
+    param_val = str_value    
+END GET_STR_PARM
+
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : MK_LIB_VER
+-- Function  : Show library version info on TP.
+-- Param     : None
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/12/07
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE MK_LIB_VER
+BEGIN
+    -- Version info
+    FORCE_SPMENU(TP_PANEL,SPI_TPUSER,1)
+    WRITE TPDISPLAY(CHR(128),CHR(137))
+    WRITE TPPROMPT(CHR(128),CHR(137))
+    WRITE TPERROR(CHR(128),CHR(137))
+    WRITE TPFUNC(CHR(128),CHR(137))
+    
+    WRITE TPDISPLAY('******************',CR)
+    WRITE TPDISPLAY('Mengk Lib Ver : V25.12',CR)
+    WRITE TPDISPLAY('Author        : Zhao,Mengkang',CR)
+    WRITE TPDISPLAY('E-mail        : 964210817@qq.com',CR)
+    WRITE TPDISPLAY('Date          : 2025/12/07',CR)
+    WRITE TPDISPLAY('******************',CR)
+    
+    DELAY 5000
+    
+    WRITE TPDISPLAY(CHR(128),CHR(137))
+    WRITE TPPROMPT(CHR(128),CHR(137))
+    WRITE TPERROR(CHR(128),CHR(137))
+    WRITE TPFUNC(CHR(128),CHR(137))
+END MK_LIB_VER
+
+
+BEGIN
+	MK_LIB_VER
+
+END MK_LIB

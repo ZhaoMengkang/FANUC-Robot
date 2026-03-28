@@ -212,8 +212,16 @@
       <div class="row">
         <div>
           <label>Decimal</label>
-          <!-- 保持 text：允许输入 3.14 / 1e-3 / NaN / Infinity -->
-          <input id="dec" type="text" placeholder="e.g. 3.1415926, -0, NaN, Infinity, -Infinity" />
+          <input
+            id="dec"
+            type="text"
+            inputmode="decimal"
+            pattern="[0-9.,\\-+eEinfINFaN∞]*"
+            placeholder="e.g. 3.1415926, -0, NaN, Infinity, -Infinity"
+            autocomplete="off"
+            autocapitalize="off"
+            spellcheck="false"
+          />
           <div class="hint">Typing here converts to IEEE-754 and updates Hex/Binary immediately.</div>
         </div>
 
@@ -308,10 +316,6 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.</pre>
-
-    <div style="margin-top:10px; color:var(--muted); font-size:12px;">
-      Tip: If you publish a repository, add a “Source Code” link here.
-    </div>
   </div>
 </dialog>
 
@@ -402,25 +406,57 @@ SOFTWARE.</pre>
     return out;
   }
 
-  function decToBytesBE(decStr, c){
-    let s = (decStr||"").trim();
-    if(s.length === 0) return null;
+  // NEW: normalization for locale/full-width punctuation
+  function normalizeNumericInput(raw){
+    if (raw == null) return "";
+    let s = String(raw).trim();
+    // full-width digits ０-９
+    s = s.replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFF10 + 0x30));
+    // full-width / locale punctuation to dot: ，、。．٫،｡
+    s = s.replace(/[，、。．٫،｡]/g, '.');
+    // full-width minus variants
+    s = s.replace(/[－﹣－‒–—]/g, '-');
+    // accept comma as decimal separator
+    s = s.replace(/,/g, '.');
+    // infinity symbol
+    s = s.replace(/∞/g, 'Infinity');
+    return s;
+  }
 
-    let num;
-    if(/^nan$/i.test(s)) num = NaN;
-    else if(/^[-+]?inf(inity)?$/i.test(s)) num = s.startsWith("-") ? -Infinity : Infinity;
-    else if(/^-\s*0(\.0*)?([eE][-+]?\d+)?$/.test(s)) num = -0;
-    else {
-      num = Number(s); // 支持 3.14 / 1e-3 / -2.5
-      if(Number.isNaN(num)) throw new Error("Decimal cannot be parsed.");
-    }
-
+  function numToBytes(num, c){
     const buf = new ArrayBuffer(c.bytes);
     const dv = new DataView(buf);
     if(c.total === 32) dv.setFloat32(0, num, false);
     else dv.setFloat64(0, num, false);
-
     return new Uint8Array(buf);
+  }
+
+  // UPDATED: tolerant decimal parsing (allows transient states)
+  function decToBytesBE(decStr, c){
+    let s = normalizeNumericInput(decStr);
+
+    if(s.length === 0) return null;
+
+    // special tokens
+    if(/^nan$/i.test(s)) return numToBytes(NaN, c);
+    if(/^[-+]?inf(?:inity)?$/i.test(s)) return numToBytes(s.startsWith("-") ? -Infinity : Infinity, c);
+
+    // transient/incomplete states
+    const transient = [
+      /^[+\-]$/,               // just sign
+      /^\.$/,                  // just dot
+      /^[+\-]?\.$/,            // sign + dot
+      /^[+\-]?\d+\.$/,         // trailing dot: 3.
+      /^[+\-]?\d*\.?\d+[eE]$/, // 1e
+      /^[+\-]?\d*\.?\d+[eE][+\-]?$/ // 1e-
+    ];
+    if (transient.some(rx => rx.test(s))) return null;
+
+    // parse
+    let num = Number(s);
+    if (Number.isNaN(num)) throw new Error("Decimal cannot be parsed.");
+
+    return numToBytes(num, c);
   }
 
   function bytesBEToDec(bytes, c){
@@ -491,7 +527,7 @@ SOFTWARE.</pre>
         if(!bytes) return;
         updating = true;
         setStatus("ok","OK");
-        setAllFromBytesBE(bytes);
+        setAllFromBytesBE(bytes, "bits"); // pass source
       }catch(e){
         setStatus("bad", e.message || String(e));
       }finally{
@@ -505,7 +541,8 @@ SOFTWARE.</pre>
     el.bitrow.oninput = null;
   }
 
-  function setAllFromBytesBE(bytes){
+  // UPDATED: source-aware update; do not overwrite active input
+  function setAllFromBytesBE(bytes, source){
     const c = cfg();
     if(!bytes || bytes.length !== c.bytes) return;
 
@@ -540,74 +577,99 @@ SOFTWARE.</pre>
     const show = (want === "BE") ? arr : arr.slice().reverse();
     el.outBytes.textContent = show.map(b => b.toString(16).padStart(2,"0").toUpperCase()).join(" ");
 
-    el.hex.value = hx;
-    el.bin.value = `${S} ${E} ${M}`;
-    el.dec.value =
+    // Update non-source inputs only
+    if (source !== "hex") el.hex.value = hx;
+    if (source !== "bin") el.bin.value = `${S} ${E} ${M}`;
+    if (source !== "dec") {
+      el.dec.value =
+        (klass === "NaN") ? "NaN" :
+        (klass === "+Infinity") ? "Infinity" :
+        (klass === "-Infinity") ? "-Infinity" :
+        (Object.is(dec, -0) ? "-0" : String(dec));
+    }
+    el.outDec.textContent =
       (klass === "NaN") ? "NaN" :
       (klass === "+Infinity") ? "Infinity" :
       (klass === "-Infinity") ? "-Infinity" :
       (Object.is(dec, -0) ? "-0" : String(dec));
-    el.outDec.textContent = el.dec.value;
   }
 
   let updating = false;
+  let currentSource = null;
 
   function onDecInput(){
     if(updating) return;
+    currentSource = "dec";
     try{
       const c = cfg();
       const bytes = decToBytesBE(el.dec.value, c);
-      if(!bytes){ setStatus("warn","Empty"); return; }
+      if(bytes === null){
+        // transient: don't update others yet
+        setStatus("warn","Typing…");
+        return;
+      }
       updating = true;
       setStatus("ok","OK");
-      setAllFromBytesBE(bytes);
+      setAllFromBytesBE(bytes, "dec");
     }catch(e){
       setStatus("bad", e.message || String(e));
     }finally{
       updating = false;
+      currentSource = null;
     }
   }
 
   function onHexInput(){
     if(updating) return;
+    currentSource = "hex";
     try{
       const c = cfg();
       const bytes = hexToBytesBE(el.hex.value, c.bytes);
       if(!bytes){ setStatus("warn","Empty"); return; }
       updating = true;
       setStatus("ok","OK");
-      setAllFromBytesBE(bytes);
+      setAllFromBytesBE(bytes, "hex");
     }catch(e){
       setStatus("bad", e.message || String(e));
     }finally{
       updating = false;
+      currentSource = null;
     }
   }
 
   function onBinInput(){
     if(updating) return;
+    currentSource = "bin";
     try{
       const c = cfg();
       const bytes = bitsToBytesBE(el.bin.value, c.bytes);
       if(!bytes){ setStatus("warn","Empty"); return; }
       updating = true;
       setStatus("ok","OK");
-      setAllFromBytesBE(bytes);
+      setAllFromBytesBE(bytes, "bin");
     }catch(e){
       setStatus("bad", e.message || String(e));
     }finally{
       updating = false;
+      currentSource = null;
     }
   }
 
-  el.dec.addEventListener("input", onDecInput);
+  // small debounce for better UX while typing decimals
+  function debounce(fn, delay){
+    let t;
+    return function(...args){
+      clearTimeout(t);
+      t = setTimeout(() => fn.apply(this, args), delay);
+    };
+  }
+
+  el.dec.addEventListener("input", debounce(onDecInput, 60));
   el.hex.addEventListener("input", onHexInput);
   el.bin.addEventListener("input", onBinInput);
 
   el.precision.addEventListener("change", () => {
     setStatus("ok","OK");
-    const c = cfg();
-    el.layout.textContent = `layout: 1 / ${c.eBits} / ${c.mBits}`;
     if((el.hex.value||"").trim()) onHexInput();
     else if(clean01(el.bin.value||"")) onBinInput();
     else onDecInput();
@@ -642,7 +704,6 @@ SOFTWARE.</pre>
     updating = false;
   });
 
-  // --- License dialog bindings ---
   const licenseBtn = document.getElementById("licenseBtn");
   const licenseDialog = document.getElementById("licenseDialog");
   const licenseCloseBtn = document.getElementById("licenseCloseBtn");
@@ -653,11 +714,9 @@ SOFTWARE.</pre>
       else licenseDialog.setAttribute("open", "");
     });
   }
-
   if(licenseCloseBtn && licenseDialog){
     licenseCloseBtn.addEventListener("click", () => licenseDialog.close());
   }
-
   if(licenseDialog){
     licenseDialog.addEventListener("click", (e) => {
       const r = licenseDialog.getBoundingClientRect();
@@ -666,7 +725,7 @@ SOFTWARE.</pre>
     });
   }
 
-  // Init
+  // Initialize with an example
   el.dec.value = "3.1415926";
   onDecInput();
 })();

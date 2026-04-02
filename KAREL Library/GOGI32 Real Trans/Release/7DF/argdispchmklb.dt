@@ -1,0 +1,24 @@
+{* -*-coding:chinese-gbk-*-}
+{Basic}
+
+[PROGRAM]
+NAME = "GO32_SEND"
+ARGUMENT = '4'
+[ARGUMENT]
+N01 = "IO 开始索引"
+N02 = "IO 结束索引"
+V03 = "小端模式":'1',
+           "大端模式":'2'
+N04 = "发送值"
+[ENDPROGRAM]
+
+[PROGRAM]
+NAME = "GI32_RECV"
+ARGUMENT = '4'
+[ARGUMENT]
+N01 = "IO 开始索引"
+N02 = "IO 结束索引"
+V03 = "小端模式":'1',
+           "大端模式":'2'
+N04 = "接收值 R[ ]"
+[ENDPROGRAM]

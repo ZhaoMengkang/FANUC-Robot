@@ -1,0 +1,24 @@
+{* -*-coding:chinese-gbk-*-}
+{Basic}
+
+[PROGRAM]
+NAME = "GO32_SEND"
+ARGUMENT = '4'
+[ARGUMENT]
+N01 = "IO Start Index"
+N02 = "IO End Index"
+V03 = "little-endian":'1',
+           "big-endian":'2'
+N04 = "Send Value"
+[ENDPROGRAM]
+
+[PROGRAM]
+NAME = "GI32_RECV"
+ARGUMENT = '4'
+[ARGUMENT]
+N01 = "IO Start Index"
+N02 = "IO End Index"
+V03 = "little-endian":'1',
+           "big-endian":'2'
+N04 = "Recve Value R[ ]"
+[ENDPROGRAM]

@@ -1,0 +1,291 @@
+-------------------------------------------
+--- 功能：KAREL & TP 背景
+--- 作者： 赵梦康
+--- 联系： QQ964210817  TEL-86+15609926275
+--- 日期： 2023/09/15
+-------------------------------------------
+PROGRAM A_MK_RUNBG_
+%NOBUSYLAMP
+%NOLOCKGROUP
+%NOABORT = ERROR + COMMAND + TPENABLE
+%NOPAUSE = ERROR + COMMAND + TPENABLE
+%SYSTEM
+%COMMENT = 'Mengk BG Process'
+%STACKSIZE = 4000
+CONST
+max_prg = 20
+TYPE
+exe_prg  = STRUCTURE
+	prg_nam : STRING[30]
+	CUR_STAT  : STRING[10]
+	cold_run  : BOOLEAN
+ENDSTRUCTURE
+
+VAR
+bg_prog  IN CMOS :ARRAY[max_prg] OF exe_prg
+sys_fil          :FILE
+indexi           :INTEGER
+indexij          :INTEGER
+sys_done         :BOOLEAN 
+value_array      :ARRAY[60] OF STRING[20]
+inact_array,chg_array:ARRAY[60]OF BOOLEAN
+term_mask,def_item,term_char,form_sta:INTEGER
+timer1           :INTEGER
+
+ROUTINE SY_READY_STA:BOOLEAN
+VAR
+status  :INTEGER
+ready   :BOOLEAN
+entry   :INTEGER
+BEGIN
+	GET_VAR(entry,'*SYSTEM*','$PWRUP_DELAY.$SY_READY',ready,status)
+	IF (status= 0)THEN
+		IF (ready = TRUE)THEN
+			RETURN (TRUE)
+		ELSE
+			RETURN (FALSE)
+		ENDIF
+	ELSE
+		RETURN (FALSE)
+	ENDIF	
+END SY_READY_STA
+
+ROUTINE mainexec(prg_nam:STRING;option:INTEGER;prg_sta:INTEGER)
+VAR
+loaded,init:BOOLEAN
+task_atr   :INTEGER
+BEGIN
+	IF(NOT(UNINIT(prg_nam)) OR (NOT(UNINIT(option))))THEN
+		LOAD_STATUS(prg_nam,loaded,init)
+		IF (loaded = TRUE)THEN
+			SELECT option OF
+				CASE(1001):	-- creat task						
+							GET_ATTR_PRG(prg_nam,AT_CONTROL,task_atr,'',0)
+							task_atr = task_atr OR 2
+							SET_ATTR_PRG(prg_nam,18,task_atr,'',0)
+							SET_ATTR_PRG(prg_nam,AT_IGNR_ABRT,7,'',0)
+							SET_ATTR_PRG(prg_nam,AT_IGNR_PAUS,7,'',0)
+							SET_ATTR_PRG(prg_nam,AT_BUSY_OFF,1,'',0)
+							RUN_TASK(prg_nam,1,FALSE,TRUE,0,0)
+				CASE(1002): -- abort task
+							ABORT_TASK(prg_nam,TRUE,TRUE,0)	
+				CASE(1003): -- get_task sta
+							GET_TSK_INFO(prg_nam,0,TSK_STATUS,prg_sta,'',0)
+			ELSE:
+				-- 				
+			ENDSELECT
+		ENDIF
+		option   = 0
+	ENDIF	
+END mainexec
+
+ROUTINE INIT
+BEGIN
+
+	SET_VAR(0,'*SYSTEM*','$CUSTOMMENU[19].$TITLE','BG Process',0)
+	SET_VAR(0,'*SYSTEM*','$CUSTOMMENU[19].$PROG_NAME','A_MK_RUNBG_',0)
+	SET_VAR(0,'*SYSTEM*','$CUSTOMMENU[19].$OPTION',0,0)
+	SET_VAR(0,'*SYSTEM*','$SCR.$MAXNUMTASK',28,0)
+	OPEN FILE sys_fil('RW','FRA:\cold2cus.com')
+	WRITE sys_fil('PRINT "cold2cus.com complete"',CR)
+	WRITE sys_fil('RUNPC A_MK_RUNBG_',CR)
+	CLOSE FILE sys_fil
+	SPRUNCMD('XCOPY FRA:\cold2cus.com FRSU:\cold2cus.com',0)
+	KCL('DELETE FILE FRA:\cold2cus.com YES',0)	
+END INIT
+
+ROUTINE GET_PRG_STA(TSK_NAME:STRING):STRING
+VAR
+cur_sta ,sta  :INTEGER
+BEGIN
+	IF(TSK_NAME = '')THEN
+		RETURN ('ABORT')
+	ENDIF
+	GET_TSK_INFO((TSK_NAME),0,TSK_STATUS,cur_sta,'',sta)
+	IF (sta <>0)THEN
+		RETURN ('ABORT')
+	ENDIF
+	IF (cur_sta = PG_RUNACCEPT)THEN
+		RETURN ('RUN')
+	ENDIF
+	
+	IF (cur_sta = PG_ABORTING)THEN
+		RETURN('ABORT')
+	ENDIF
+	
+	IF (cur_sta = PG_RUNNING)THEN
+		RETURN ('RUN')
+	ENDIF
+	
+	IF (cur_sta = PG_PAUSED)THEN
+		RETURN ('PAUSE')
+	ENDIF	
+	
+	IF (cur_sta = PG_ABORTED)THEN
+		RETURN ('ABORT')
+	ENDIF
+	RETURN ('ABORT')
+END GET_PRG_STA
+
+ROUTINE COND_PRG_STA
+VAR
+i__  :INTEGER
+BEGIN
+	DISCONNECT TIMER timer1
+	timer1 = 0
+	FOR i__ = 1 TO max_prg DO
+		bg_prog[i__].CUR_STAT = GET_PRG_STA(bg_prog[i__].prg_nam)
+	ENDFOR
+	CONNECT TIMER TO timer1
+END COND_PRG_STA
+
+ROUTINE CNV_INT2STR(i:INTEGER):STRING
+VAR
+str  :STRING[120]
+BEGIN
+	IF(UNINIT(i))THEN RETURN ('0');ENDIF
+	CNV_INT_STR(i,0,0,str)
+	IF (INDEX(str,' ')>0)THEN
+		str = SUB_STR(str,INDEX(str,' ')+1,STR_LEN(str)-INDEX(str,' '))
+	ENDIF
+	RETURN(str)
+END CNV_INT2STR
+
+ROUTINE CLR_PRG_STR
+BEGIN
+	IF (NOT(UNINIT(def_item)))THEN
+		IF (def_item > 0)AND (def_item < 40)THEN
+			IF def_item MOD 2 = 0 THEN
+					IF ( GET_PRG_STA(bg_prog[(def_item DIV 2)].prg_nam) = 'ABORT') THEN
+						bg_prog[(def_item DIV 2)].prg_nam = ''
+						bg_prog[(def_item DIV 2)].cold_run = FALSE
+					ELSE
+						POST_ERR(38092,'Please exec STOP',0,0)
+					ENDIF
+			ELSE
+					IF (GET_PRG_STA(bg_prog[((def_item+1) DIV 2)].prg_nam) = 'ABORT') THEN
+						bg_prog[((def_item+1) DIV 2)].prg_nam = ''
+						bg_prog[((def_item+1) DIV 2)].cold_run = FALSE
+					ELSE
+						POST_ERR(38092,'Please exec STOP',0,0)
+					ENDIF
+			ENDIF
+		ENDIF
+	ENDIF
+
+END CLR_PRG_STR
+
+
+BEGIN
+	
+	sys_done = SY_READY_STA
+	IF (sys_done)THEN  -- System start done
+		INIT
+		POST_ERR(38092,'[MK_BG]installed Ver=2023/9/15',0,0)
+		
+		DISCONNECT TIMER timer1
+		timer1 = 0
+		FOR indexi = 1 TO max_prg DO
+			IF UNINIT(bg_prog[indexi].prg_nam) THEN
+				bg_prog[indexi].prg_nam = ''
+			ENDIF
+			IF UNINIT(bg_prog[indexi].CUR_STAT)THEN
+				bg_prog[indexi].CUR_STAT = 'STOP'
+			ENDIF
+			
+			IF UNINIT(bg_prog[indexi].COLD_RUN)THEN
+				bg_prog[indexi].COLD_RUN = FALSE
+			ENDIF
+		ENDFOR
+		CONNECT TIMER TO timer1
+		
+		-- 程序状态
+		CONDITION[1]:
+			WHEN timer1 >1000 DO
+				ENABLE CONDITION[1]
+				COND_PRG_STA
+		ENDCONDITION
+		ENABLE CONDITION[1]
+			
+		-- 删除指定行
+		CONDITION[2]:
+			WHEN TPIN[8] DO
+				ENABLE CONDITION[2]
+				CLR_PRG_STR
+		ENDCONDITION
+		
+				
+		ENABLE CONDITION[1]
+		ENABLE CONDITION[2]
+		
+		-- 设定窗口
+		show_wind::
+		indexij = 1
+		FOR indexi = 1 TO 60 DO  
+			value_array[indexi] = 'bg_prog['+CNV_INT2STR(indexij)+'].prg_nam'
+			value_array[indexi+1] = 'bg_prog['+CNV_INT2STR(indexij)+'].cold_run'
+			value_array[indexi+2] = 'bg_prog['+CNV_INT2STR(indexij)+'].cur_stat'
+			indexi = indexi + 2
+			IF indexi MOD 3 = 0 THEN
+				indexij = indexij + 1
+			ENDIF
+		ENDFOR
+
+		term_mask = 2 OR 16 OR 2048  --OR 8192 
+		DELAY 10
+	
+		
+		-- 显示窗口
+		FORCE_SPMENU(TP_PANEL,SPI_TPUSER2,1)
+		term_char = 0
+		
+		DISCTRL_FORM('MKBG',0,value_array,inact_array,chg_array,term_mask,def_item,term_char,form_sta)
+		FOR indexi = 1 TO 60 DO
+			IF (chg_array[indexi] = TRUE)THEN
+				POST_ERR(38092,'Please look help ',0,0)
+			ENDIF
+			--indexi = indexi + 1	
+		ENDFOR
+		IF(form_sta = 0)THEN
+			IF (term_char = KY_F1)THEN
+				IF def_item MOD 2 = 0 THEN
+					mainexec((bg_prog[(def_item DIV 2)].prg_nam),1001,0)
+				ELSE
+					mainexec((bg_prog[((def_item+1) DIV 2)].prg_nam),1001,0)
+				ENDIF
+		
+			ENDIF	
+			IF (term_char = KY_F2)THEN
+				IF def_item MOD 2 = 0 THEN
+					mainexec((bg_prog[(def_item DIV 2)].prg_nam),1002,0)
+				ELSE
+					mainexec((bg_prog[((def_item+1) DIV 2)].prg_nam),1002,0)
+				ENDIF
+			ENDIF
+				
+			
+			IF (term_char = KY_F3) OR (term_char = 0) THEN
+				FORCE_SPMENU(TP_PANEL,SPI_TPSELECT,1)
+				ABORT
+			ENDIF
+		ELSE
+			ABORT
+		ENDIF
+		GOTO show_wind
+	
+	
+		
+	ELSE
+		-- 执行创建任务
+		FOR indexi = 1 TO max_prg DO
+			IF (NOT(UNINIT(bg_prog[indexi].COLD_RUN))) AND (NOT(UNINIT(bg_prog[indexi].prg_nam))) THEN
+				IF bg_prog[indexi].COLD_RUN = TRUE THEN
+					mainexec((bg_prog[indexi].prg_nam),1001,0)
+				ENDIF
+			ENDIF
+		ENDFOR
+	ENDIF
+	
+	
+	
+END A_MK_RUNBG_

@@ -1,0 +1,42 @@
+PROGRAM GO32_SEND
+%SYSTEM
+%PRIORITY = 143
+%STACKSIZE = 3000
+%NOLOCKGROUP
+%NOBUSYLAMP
+%NOPAUSESHFT
+%NOPAUSE = ERROR + COMMAND + TPENABLE
+%COMMENT = 'Send Real'
+
+CONST
+ERR_MSG	= 0
+ERR_PAUSE	= 1
+ERR_SRVO	= 2
+
+VAR
+
+io_start	:INTEGER
+io_end		:INTEGER
+send_val	:REAL
+modei		:INTEGER
+
+
+ROUTINE GO32(io_start:INTEGER; io_end:INTEGER; is_little:BOOLEAN; real_val:REAL) FROM MK_LIB
+ROUTINE GET_INT_PARM(param_no:INTEGER;param_val:INTEGER) FROM MK_LIB
+ROUTINE GET_REL_PARM(param_no:INTEGER;param_val:REAL) FROM MK_LIB
+ROUTINE GET_STR_PARM(param_no:INTEGER;param_val:STRING) FROM MK_LIB
+
+BEGIN
+	GET_INT_PARM(1,io_start)
+	GET_INT_PARM(2,io_end)
+	GET_INT_PARM(3,modei)
+	GET_REL_PARM(4,send_val)	
+	SELECT modei OF
+		CASE (1):
+			GO32(io_start,io_end,TRUE,send_val)
+		CASE (2):
+			GO32(io_start,io_end,FALSE,send_val)
+	ELSE:
+		POST_ERR(38092,'Invalid Param,mode =[1,2]',0,2)
+	ENDSELECT
+END GO32_SEND

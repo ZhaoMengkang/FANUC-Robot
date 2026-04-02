@@ -1,0 +1,54 @@
+.form 
+$-,prg_table
+&home&reverse"背景程序" &standard &new_line
+"    程序 ""       " "开机运行"  "   状态"  "       " &new_line
+"1 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"2 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"3 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"4 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"5 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"6 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"7 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"8 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"9 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"10""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"11""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"12""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"13""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"14""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"15""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"16""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"17""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"18""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"19""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"20""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+?help
+^func
+.endform
+
+$-,enum_bool
+" NO" &new_line
+" YES"
+
+$-,func
+"运行" &new_line
+"停止" &new_line
+"退出" &new_line
+"清除" &new_line
+" 帮助" &new_line
+$-,help
+&fg_red
+"请阅读以下内容，确认后请按PREV返回 "&new_line
+&standard &fg_dflt&bg_dflt
+"检查PC程序是否按照:(不得包含任何动作组)"&new_line&bg_cyan
+"     LOOP:                     "&new_line
+"          {其它语句}           "&new_line
+"          DELAY 100 -- <-延时  "&new_line
+"     GOTO LOOP                 "&new_line &bg_dflt
+"检查TP程序是否按照:(不得包含任何动作组)"&new_line &bg_cyan
+"     LBL[100]                  "&new_line
+"          {其它语句}           "&new_line
+"     JMP LBL[100]              "&bg_dflt &new_line
+
+"Author : Mengk  电话:86+15609926275"&new_line
+"E-mail : 964210817@qq.com"&new_line

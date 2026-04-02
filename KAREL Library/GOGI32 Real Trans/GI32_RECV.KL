@@ -1,0 +1,66 @@
+PROGRAM GI32_RECV
+%SYSTEM
+%PRIORITY = 143
+%STACKSIZE = 3000
+%NOLOCKGROUP
+%NOBUSYLAMP
+%NOPAUSESHFT
+%NOPAUSE = ERROR + COMMAND + TPENABLE
+%COMMENT = 'Receive Real'
+
+CONST
+ERR_MSG	= 0
+ERR_PAUSE	= 1
+ERR_SRVO	= 2
+
+VAR
+io_start	:INTEGER
+io_end		:INTEGER
+modei		:INTEGER
+r_index		:INTEGER
+
+recv_val	:REAL
+status		:INTEGER
+
+byte_arr   : ARRAY[4] OF BYTE  -- 4 bytes representation of float
+-- You can view this variable during debugging.
+
+
+ROUTINE CNV_INT2STR(in_int:INTEGER):STRING FROM MK_LIB
+ROUTINE CNV_REL2STR(in_real:REAL):STRING FROM MK_LIB
+ROUTINE POW2(n:INTEGER):INTEGER FROM MK_LIB
+ROUTINE CNV_BYTE2BIT(val: INTEGER; out_bits: ARRAY OF INTEGER) FROM MK_LIB
+ROUTINE CNV_BIT2BYTE(in_bits: ARRAY OF INTEGER; val: INTEGER) FROM MK_LIB
+ROUTINE CNV_REL2BYTE(
+    r_val:REAL;
+    is_little:BOOLEAN;
+    byte_arr:ARRAY OF BYTE) FROM MK_LIB
+ROUTINE CNV_BYTE2REL(
+    byte_arr:ARRAY OF BYTE;
+    is_little:BOOLEAN;
+    r_val:REAL) FROM MK_LIB
+ROUTINE GI32(io_start:INTEGER; io_end:INTEGER; is_little:BOOLEAN; real_val:REAL) FROM MK_LIB
+ROUTINE GO32(io_start:INTEGER; io_end:INTEGER; is_little:BOOLEAN; real_val:REAL) FROM MK_LIB
+ROUTINE GET_INT_PARM(param_no:INTEGER;param_val:INTEGER) FROM MK_LIB
+ROUTINE GET_REL_PARM(param_no:INTEGER;param_val:REAL) FROM MK_LIB
+ROUTINE GET_STR_PARM(param_no:INTEGER;param_val:STRING) FROM MK_LIB
+
+
+-- Main
+BEGIN
+	GET_INT_PARM(1,io_start)
+	GET_INT_PARM(2,io_end)
+	GET_INT_PARM(3,modei)
+	GET_INT_PARM(4,r_index)	
+	SELECT modei OF
+		CASE (1):
+			GI32(io_start,io_end,TRUE,recv_val)
+		CASE (2):
+			GI32(io_start,io_end,FALSE,recv_val)
+	ELSE:
+		POST_ERR(38092,'Invalid Param,mode =[1,2]',0,2)
+	ENDSELECT
+	
+	SET_REAL_REG(r_index,recv_val,status)
+	IF(status <> 0)THEN POST_ERR(status,'',0,2);ABORT;ENDIF	
+END GI32_RECV

@@ -1,0 +1,52 @@
+.form 
+$-,prg_table
+&home&reverse"BG PROCESS" &standard &new_line
+"    PROGRAM ""    " "PWRUP RUN?"  " STATUS"  "       " &new_line
+"1 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"2 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"3 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"4 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"5 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"6 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"7 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"8 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"9 ""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"10""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"11""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"12""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"13""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"14""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"15""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"16""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"17""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"18""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"19""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+"20""[""-%-12pk""]"   "  "  "-%4B(enum_bool)"   "  "       "%8k" &new_line
+?help
+^func
+.endform
+
+$-,enum_bool
+" NO" &new_line
+" YES"
+
+$-,func
+"RUN" &new_line
+"ABORT" &new_line
+"EXIT" &new_line
+"" &new_line
+" HELP" &new_line
+$-,help
+&fg_red" Please read, PREV return "&new_line
+&standard &fg_dflt&bg_dflt
+"Check PC:(NO MOTION)"&new_line&bg_cyan
+"     LOOP:                     "&new_line
+"          {statement}          "&new_line
+"          DELAY 100 -- <-Must  "&new_line
+"     GOTO LOOP                 "&new_line &bg_dflt
+"Check TP:(NO MOTION)"&new_line &bg_cyan
+"     LBL[100]                  "&new_line
+"          {statement}          "&new_line
+"     JMP LBL[100]              "&bg_dflt &new_line
+"Author : Mengk  Tel:86+15609926275"&new_line
+"E-mail : 964210817@qq.com"&new_line

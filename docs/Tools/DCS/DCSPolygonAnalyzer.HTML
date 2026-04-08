@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polygon Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        #controls {
+            margin-bottom: 20px;
+        }
+
+        .point-input {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .point-input label {
+            margin-right: 10px;
+        }
+
+        .point-input input {
+            width: 200px;
+            margin-right: 5px;
+        }
+
+        button {
+            margin: 5px;
+            padding: 10px;
+            font-size: 14px;
+        }
+
+        #canvas {
+            border: 1px solid black;
+            display: block;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Polygon Analyzer</h1>
+    <div id="controls">
+        <label for="pointCount">Number of Points:</label>
+        <input type="number" id="pointCount" min="3" value="3" onchange="generateInputFields()">
+
+        <button onclick="analyzePolygon()">Analyze Polygon</button>
+        <button onclick="saveData()">Export Data</button>
+        <input type="file" id="fileInput" onchange="importData()" style="display: none;">
+        <button onclick="document.getElementById('fileInput').click()">Import Data</button>
+    </div>
+
+    <div id="inputFields">
+        <!-- Input fields will be generated here -->
+    </div>
+    <canvas id="canvas" width="500" height="500"></canvas>
+
+    <script>
+        let scale = 1;
+        let draggingIndex = -1;
+        let offsetX, offsetY;
+        const points = [];
+    
+        function generateInputFields() {
+            const count = parseInt(document.getElementById('pointCount').value);
+            const container = document.getElementById('inputFields');
+            container.innerHTML = ''; // Clear previous fields
+    
+            for (let i = 0; i < count; i++) {
+                points[i] = points[i] || { x: 0, y: 0 }; // Initialize points to zero if not already defined
+                const div = document.createElement('div');
+                div.className = 'point-input';
+                div.innerHTML = `<label>P${i + 1}</label>
+                                 <input type="number" id="x${i + 1}" value="${points[i].x.toFixed(3)}" placeholder="X" step="0.001" onchange="updatePoint(${i})">
+                                 <input type="number" id="y${i + 1}" value="${points[i].y.toFixed(3)}" placeholder="Y" step="0.001" onchange="updatePoint(${i})">`;
+                container.appendChild(div);
+            }
+        }
+    
+        function updatePoint(index) {
+            const x = Number(document.getElementById(`x${index + 1}`).value);
+            const y = Number(document.getElementById(`y${index + 1}`).value);
+            points[index] = { x: parseFloat(x.toFixed(3)), y: parseFloat(y.toFixed(3)) };
+            analyzePolygon();
+        }
+    
+        function analyzePolygon() {
+            console.log('Analyze Polygon function triggered');
+    
+            const canvas = document.getElementById('canvas');
+            const ctx = canvas.getContext('2d');
+            const pointCount = parseInt(document.getElementById('pointCount').value);
+    
+            // Parse points
+            const parsedPoints = [];
+            for (let i = 1; i <= pointCount; i++) {
+                const x = parseFloat(Number(document.getElementById(`x${i}`).value).toFixed(3));
+                const y = parseFloat(Number(document.getElementById(`y${i}`).value).toFixed(3));
+                parsedPoints.push({ x, y });
+            }
+    
+            if (parsedPoints.length < 3) {
+                alert('Insufficient point count to form a polygon');
+                return;
+            }
+    
+            points.length = 0;
+            Array.prototype.push.apply(points, parsedPoints);
+    
+            // Calculate boundaries
+            const minX = Math.min(...points.map(p => p.x));
+            const maxX = Math.max(...points.map(p => p.x));
+            const minY = Math.min(...points.map(p => p.y));
+            const maxY = Math.max(...points.map(p => p.y));
+    
+            const scaleX = canvas.width / (maxX - minX);
+            const scaleY = canvas.height / (maxY - minY);
+            scale = Math.min(scaleX, scaleY) * 0.9;
+            offsetX = (canvas.width - (maxX - minX) * scale) / 2 - minX * scale;
+            offsetY = (canvas.height - (maxY - minY) * scale) / 2 - minY * scale;
+    
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+            ctx.beginPath();
+            ctx.moveTo(points[0].x * scale + offsetX, points[0].y * scale + offsetY);
+            points.forEach(point => ctx.lineTo(point.x * scale + offsetX, point.y * scale + offsetY));
+            ctx.closePath();
+            ctx.stroke();
+    
+            function isConvex(points) {
+                let sign = 0;
+                const problematicIndices = new Set();
+                for (let i = 0; i < points.length; i++) {
+                    const p0 = points[i];
+                    const p1 = points[(i + 1) % points.length];
+                    const p2 = points[(i + 2) % points.length];
+    
+                    const crossProduct =
+                        (p1.x - p0.x) * (p2.y - p0.y) -
+                        (p1.y - p0.y) * (p2.x - p0.x);
+    
+                    if (crossProduct !== 0) {
+                        if (sign === 0) {
+                            sign = crossProduct > 0 ? 1 : -1;
+                        } else if (sign !== (crossProduct > 0 ? 1 : -1)) {
+                            problematicIndices.add((i + 1) % points.length);
+                        }
+                    }
+                }
+                return problematicIndices;
+            }
+    
+            const isPolygonConvex = isConvex(points);
+    
+            points.forEach((point, index) => {
+                const color = isPolygonConvex.has(index) ? 'red' : 'green';
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.arc(point.x * scale + offsetX, point.y * scale + offsetY, 5, 0, 2 * Math.PI);
+                ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.font = '12px Arial';
+                const label = isPolygonConvex.has(index) ? `-> P${index + 1}` : `P${index + 1}`;
+                ctx.fillText(label, point.x * scale + offsetX + 5, point.y * scale + offsetY + 15);
+            });
+        }
+    
+        function saveData() {
+            const pointCount = parseInt(document.getElementById('pointCount').value);
+            const csvDataElements = [];
+            for (let i = 1; i <= pointCount; i++) {
+                const x = parseFloat(Number(document.getElementById(`x${i}`).value).toFixed(3));
+                const y = parseFloat(Number(document.getElementById(`y${i}`).value).toFixed(3));
+                csvDataElements.push(`${x},${y}`);
+            }
+            const csvContent = csvDataElements.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'polygon_data.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    
+        function importData() {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            if (!file) return;
+    
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const csvContent = e.target.result.trim();
+                const pointData = csvContent.split('\n').map(entry => entry.split(',').map(Number));
+    
+                if (pointData.length < 3) {
+                    alert("Please enter at least three points.");
+                    return;
+                }
+    
+                // Clear existing points
+                points.length = 0;
+    
+                // Populate with imported points with precision
+                pointData.forEach(point => points.push({ x: parseFloat(point[0].toFixed(3)), y: parseFloat(point[1].toFixed(3)) }));
+    
+                // Update the point count and regenerate input fields
+                document.getElementById('pointCount').value = points.length;
+                generateInputFields();
+    
+                // Populate input fields with imported data
+                points.forEach((point, index) => {
+                    document.getElementById(`x${index + 1}`).value = point.x.toFixed(3);
+                    document.getElementById(`y${index + 1}`).value = point.y.toFixed(3);
+                });
+    
+                // Analyze and redraw the polygon
+                analyzePolygon();
+            };
+    
+            reader.readAsText(file);
+        }
+    
+        const canvas = document.getElementById('canvas');
+        canvas.addEventListener('mousedown', (e) => {
+            const mouseX = e.offsetX;
+            const mouseY = e.offsetY;
+            for (let i = 0; i < points.length; i++) {
+                const point = points[i];
+                const pointX = point.x * scale + offsetX;
+                const pointY = point.y * scale + offsetY;
+                const dx = mouseX - pointX;
+                const dy = mouseY - pointY;
+                if (Math.sqrt(dx * dx + dy * dy) < 5) { // Within radius of 5 pixels
+                    draggingIndex = i;
+                    break;
+                }
+            }
+        });
+    
+        canvas.addEventListener('mousemove', (e) => {
+            if (draggingIndex === -1) return;
+            const mouseX = e.offsetX;
+            const mouseY = e.offsetY;
+            const newX = parseFloat(((mouseX - offsetX) / scale).toFixed(3));
+            const newY = parseFloat(((mouseY - offsetY) / scale).toFixed(3));
+            points[draggingIndex] = { x: newX, y: newY };
+            document.getElementById(`x${draggingIndex + 1}`).value = newX.toFixed(3);
+            document.getElementById(`y${draggingIndex + 1}`).value = newY.toFixed(3);
+            analyzePolygon();
+        });
+    
+        canvas.addEventListener('mouseup', () => {
+            draggingIndex = -1;
+        });
+    
+        // Initialize the input fields
+        generateInputFields();
+    </script>
+</body>
+
+</html>

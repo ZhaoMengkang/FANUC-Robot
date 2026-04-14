@@ -1,0 +1,99 @@
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Program:TEST_BG
+-- Function:Test the start and stop of the background task.
+-- Robot Version: 7DH1/7DF5
+-- Author: zhaomengkang
+-- Contact:zhaomengkang@hotmail.com
+-- Date:2026/04/14
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+PROGRAM TEST_BG
+%COMMENT = 'Test MIX BG'
+%NOLOCKGROUP
+%NOBUSYLAMP
+%NOPAUSESHFT
+%NOPAUSE = ERROR + COMMAND + TPENABLE
+%SYSTEM
+
+VAR
+status	:INTEGER
+char	:STRING[254]
+
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Routine   : CNV_INT2STR
+-- Function  : Convert INTEGER to STRING (without leading space)
+-- Param
+--   in_int[in]: Integer value to convert.
+-- Return   : String representation.
+--
+-- Author   : Zhao,Mengkang
+-- Date     : 2025/09/20
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ROUTINE CNV_INT2STR(in_int:INTEGER):STRING
+VAR
+str     :STRING[254]
+BEGIN
+    IF UNINIT(in_int) THEN POST_ERR(38092,'[CNV_INT2STR]in_int not init',0,2);ABORT;ENDIF
+    CNV_INT_STR(in_int,0,0,str)
+    RETURN(SUB_STR(str,2,STR_LEN(str)-1))
+END CNV_INT2STR
+
+ROUTINE BG_RUN(item:INTEGER)
+VAR
+entry	:INTEGER
+prg_name:STRING[MAX_PROG_NAM]
+prg_sta	:INTEGER
+status	:INTEGER
+BEGIN
+	prg_name = ''
+	
+	-- Check program name
+	-- $MIX_BG[ ].$PROG_NAME  (7DF5)
+	GET_VAR(entry,'$DID','$BACKGROUND_LOGIC.PROGRAM_NAME['+CNV_INT2STR(item)+']',prg_name,status)
+	IF(status <> 0)OR (prg_name='')THEN POST_ERR(38092,'BG['+CNV_INT2STR(item)+']Program name is null',0,2);RETURN;ENDIF
+	MIXBG_RUN(item,status)
+	IF (status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+	
+	DELAY 50
+	
+	-- Check task is running
+	-- $MIX_BG[ ].$STATUS (7DF5)
+	GET_VAR(entry,'$DID','$BACKGROUND_LOGIC.STATUS['+CNV_INT2STR(item)+']',prg_sta,status)
+	IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+	IF(prg_sta <> 2)THEN
+		POST_ERR(38092,'BG Program['+prg_name+']run failed',0,2)
+		RETURN
+	ENDIF
+END BG_RUN
+
+ROUTINE BG_STOP(item:INTEGER)
+VAR
+entry	:INTEGER
+prg_name:STRING[MAX_PROG_NAM]
+prg_sta	:INTEGER
+status	:INTEGER
+BEGIN
+	prg_name=''
+	
+	-- Check program name
+	-- $MIX_BG[ ].$PROG_NAME (7DF5)
+	GET_VAR(entry,'$DID','$BACKGROUND_LOGIC.PROGRAM_NAME['+CNV_INT2STR(item)+']',prg_name,status)
+	IF(status <> 0)OR (prg_name='')THEN POST_ERR(38092,'BG['+CNV_INT2STR(item)+']Program name is null',0,2);RETURN;ENDIF
+	MIXBG_STOP(item,status)
+	IF (status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+	
+	DELAY 50
+	
+	-- Check task is running
+	-- $MIX_BG[ ].$STATUS (7DF5)
+	GET_VAR(entry,'$DID','$BACKGROUND_LOGIC.STATUS['+CNV_INT2STR(item)+']',prg_sta,status)
+	IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+	IF(prg_sta <> 1)THEN
+		POST_ERR(38092,'BG Program['+prg_name+']stop failed',0,2)
+		RETURN
+	ENDIF
+END BG_STOP
+
+BEGIN
+	BG_STOP(1)
+	BG_RUN(2)
+END TEST_BG

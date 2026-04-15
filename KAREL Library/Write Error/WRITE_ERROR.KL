@@ -1,0 +1,213 @@
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+-- Program name: WRITE_ERROR
+-- Function: User alarm with parameters
+-- Usage:
+--     In the TPE program, call WRITE_ERROR with CALL
+--     CALL WRITE_ERROR('Gripper{1} is Not {2}', 2, 3, 'Open')
+--         |                    |                |  |    |
+--         |                    |                |  |    + -------- Replace parameter {2}
+--         |                    |                |  + ------------- Replace parameter {1}
+--         |                    |                + --------------- Alarm level: 0 = prompt only,
+--         |                    |                                          1 = PAUSE.G prompt,
+--         |                    |                                          2 = SRVO.G prompt
+--         |                    +---------------------------------------- Alarm message with parameters,
+--         |                                                             {x}, valid range of x: 1-9
+--         +------------------------------------------------------------ Called KAREL program
+-- Example: CALL WRITE_ERROR('Gripper{1} is Not {2}', 2, 3, 'Open')
+-- The teach pendant status bar will display: APSH-092 Gripper1 is Not Open
+--
+-- Author: Mengk 964210817@qq.com
+-- Date: 2025-05-03
+--%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+PROGRAM WRITE_ERROR
+%COMMENT = 'Post error'
+%NOLOCKGROUP
+%NOBUSYLAMP
+%NOPAUSESHFT
+%NOPAUSE = ERROR + COMMAND + TPENABLE
+%SYSTEM
+
+VAR
+    params    : ARRAY[7] OF STRING[10]
+    result    : STRING[254]
+    err_str   : STRING[254]
+    err_level : INTEGER
+    status    : INTEGER
+
+ROUTINE replace_str(
+    str_in     : STRING;
+    params     : ARRAY OF STRING;
+    param_count: INTEGER;
+    result     : STRING
+)
+VAR
+    str_lenth   : INTEGER
+    str_index   : INTEGER
+    param_index : INTEGER
+    rep_str     : STRING[254]
+BEGIN
+    result = ''
+    str_lenth = STR_LEN(str_in)
+    str_index = 1
+
+    WHILE (str_index <= str_lenth) DO
+        IF (SUB_STR(str_in, str_index, 1) = '{') THEN
+            param_index = -1
+            str_index = str_index + 1  -- Skip '{'
+
+            -- Read the number and parse it as an index
+            IF (ORD(SUB_STR(str_in, str_index, 1), 1) >= 49) AND
+               (ORD(SUB_STR(str_in, str_index, 1), 1) <= 57) THEN
+                CNV_STR_INT(SUB_STR(str_in, str_index, 1), param_index)
+                str_index = str_index + 1  -- Skip index
+            ENDIF
+
+            -- If the index is valid and followed by '}'
+            IF (param_index >= 1) AND
+               (param_index <= param_count) AND
+               (SUB_STR(str_in, str_index, 1) = '}') THEN
+
+                -- Replace with the corresponding content
+                rep_str = params[param_index]
+                result = result + rep_str
+                str_index = str_index + 1  -- Skip '}'
+            ELSE
+                -- Handle invalid format by copying characters literally
+                result = result + '{'
+                IF (param_index <> -1) THEN
+                    result = result + SUB_STR(str_in, str_index - 1, 1)  -- Copy digit
+                ENDIF
+                result = result + SUB_STR(str_in, str_index, 1)  -- Copy following character
+                str_index = str_index + 1
+            ENDIF
+        ELSE
+            -- Copy all non-placeholder characters
+            result = result + SUB_STR(str_in, str_index, 1)
+            str_index = str_index + 1
+        ENDIF
+    ENDWHILE
+END replace_str
+
+ROUTINE get_param(
+    tpe_parmNo : INTEGER;
+    result_type: INTEGER;
+    check_type : BOOLEAN;
+    result_int : INTEGER;
+    result_real: REAL;
+    result_str : STRING;
+    status     : INTEGER
+)
+VAR
+    data_type : INTEGER
+    int_val   : INTEGER
+    real_val  : REAL
+    str_val   : STRING[254]
+    temp_str  : STRING[20]
+BEGIN
+    -- Initialize output parameters
+    result_int = 0
+    result_real = 0
+    result_str = ''
+
+    -- Check result type range: 1 = INT, 2 = REAL, 3 = STR
+    IF (result_type < 1) OR (result_type > 3) THEN
+        POST_ERR(38092, '[get_param] param {result_type} out of range', 0, 2)
+    ENDIF
+
+    -- Get TPE parameter
+    GET_TPE_PRM(tpe_parmNo, data_type, int_val, real_val, str_val, status)
+
+    -- Check whether the input data type matches the expected result type
+    IF (check_type) THEN
+        -- Parameter not provided
+        IF (status <> 0) THEN
+            POST_ERR(status, '', 0, 2)
+        ENDIF
+
+        CNV_INT_STR(tpe_parmNo, 0, 0, temp_str)
+        temp_str = SUB_STR(temp_str, 2, STR_LEN(temp_str) - 1)
+
+        IF (data_type <> result_type) THEN
+            SELECT result_type OF
+                CASE (1): POST_ERR(38092, 'TPE param{' + temp_str + '} is not intger', 0, 2)
+                CASE (2): POST_ERR(38092, 'TPE param{' + temp_str + '} is not real', 0, 2)
+                CASE (3): POST_ERR(38092, 'TPE param{' + temp_str + '} is not string', 0, 2)
+            ENDSELECT
+        ENDIF
+    ENDIF
+
+    -- Parameter not provided
+    IF (status <> 0) THEN
+        RETURN
+    ENDIF
+
+    -- Convert parameter
+    SELECT result_type OF
+
+        -- Output as integer
+        CASE (1):
+            SELECT data_type OF
+                CASE (1):  -- Integer
+                    result_int = int_val
+                CASE (2):  -- Real
+                    result_int = TRUNC(real_val)
+                CASE (3):  -- String
+                    CNV_STR_INT(str_val, result_int)
+            ELSE:
+            ENDSELECT
+
+        -- Output as real
+        CASE (2):
+            SELECT data_type OF
+                CASE (1):  -- Integer
+                    result_real = int_val
+                CASE (2):  -- Real
+                    result_real = real_val
+                CASE (3):  -- String
+                    CNV_STR_REAL(str_val, result_real)
+            ELSE:
+            ENDSELECT
+
+        -- Output as string
+        CASE (3):
+            SELECT data_type OF
+                CASE (1):  -- Integer
+                    CNV_INT_STR(int_val, 0, 0, result_str)
+                    result_str = SUB_STR(result_str, 2, STR_LEN(result_str) - 1)
+                CASE (2):  -- Real
+                    CNV_REAL_STR(real_val, 0, 3, result_str)
+                    result_str = SUB_STR(result_str, 2, STR_LEN(result_str) - 1)
+                CASE (3):  -- String
+                    result_str = str_val
+            ELSE:
+            ENDSELECT
+
+    ELSE:
+    ENDSELECT
+END get_param
+
+BEGIN
+    -- Parameter 1: alarm message
+    get_param(1, 3, TRUE, 0, 0, err_str, status)
+
+    -- Parameter 2: alarm level
+    get_param(2, 1, TRUE, err_level, 0, '', status)
+    IF (err_level < 0) OR (err_level > 3) THEN
+        POST_ERR(38092, 'Error, level out of range', 0, 2)
+    ENDIF
+
+    -- Parameters 3-9: replacement parameters
+    get_param(3, 3, FALSE, 0, 0, params[1], status)
+    get_param(4, 3, FALSE, 0, 0, params[2], status)
+    get_param(5, 3, FALSE, 0, 0, params[3], status)
+    get_param(6, 3, FALSE, 0, 0, params[4], status)
+    get_param(7, 3, FALSE, 0, 0, params[5], status)
+    get_param(8, 3, FALSE, 0, 0, params[6], status)
+    get_param(9, 3, FALSE, 0, 0, params[7], status)
+
+    replace_str(err_str, params, 7, result)
+
+    -- Post alarm message
+    POST_ERR(38092, result, 0, err_level)
+END WRITE_ERROR

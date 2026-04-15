@@ -16,7 +16,7 @@
 -- Example: CALL WRITE_ERROR('Gripper{1} is Not {2}', 2, 3, 'Open')
 -- The teach pendant status bar will display: APSH-092 Gripper1 is Not Open
 --
--- Author: Mengk 964210817@qq.com
+-- Author: zhaomengkang zhaomengkang@hotmail.com
 -- Date: 2025-05-03
 --%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

@@ -1,92 +1,107 @@
-# WRITE_ERROR 使用说明 / User Guide
+# WRITE_ERROR User Guide
 
-## 1. 功能说明 / Function
-`WRITE_ERROR` 用于在示教器状态栏中输出**带参数的报警信息**，并可设置报警等级。  
-`WRITE_ERROR` is used to display **parameterized alarm messages** on the teach pendant status bar and set the alarm level.
+## 1. Overview
+`WRITE_ERROR` is a KAREL program used to post **parameterized user alarms** on the teach pendant status bar.
+
+It supports message placeholders such as `{1}` to `{9}`, which are replaced by the values passed in the CALL statement.
 
 ---
 
-## 2. 调用格式 / Syntax
-
-```pascal
-CALL WRITE_ERROR('报警文本{1} {2}', 报警等级, 参数1, 参数2, ... )
-```
+## 2. Syntax
 
 ```pascal
 CALL WRITE_ERROR('Alarm text {1} {2}', AlarmLevel, Param1, Param2, ... )
 ```
 
-### 参数说明 / Parameter Description
-| 参数 / Parameter | 说明 / Description |
-|------|------|
-| `报警文本` / `Alarm text` | 字符串，支持 `{1}` ~ `{9}` 作为占位符 / String, supports `{1}` ~ `{9}` as placeholders |
-| `报警等级` / `AlarmLevel` | 整数，范围 `0~3` / Integer, range `0~3` |
-| `参数1~参数7` / `Param1~Param7` | 用于替换报警文本中的占位符 / Used to replace placeholders in the alarm text |
+---
+
+## 3. Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `Alarm text` | Alarm message string. Supports placeholders `{1}` to `{9}`. |
+| `AlarmLevel` | Alarm severity level. `0` = prompt only, `1` = PAUSE.G prompt, `2` = SRVO.G prompt. |
+| `Param1` | Replacement value for `{1}`. |
+| `Param2` | Replacement value for `{2}`. |
+| `Param3` | Replacement value for `{3}`. |
+| `Param4` | Replacement value for `{4}`. |
+| `Param5` | Replacement value for `{5}`. |
+| `Param6` | Replacement value for `{6}`. |
+| `Param7` | Replacement value for `{7}`. |
+
+> Notes:
+> - Up to 7 replacement parameters are supported in this implementation.
+> - Placeholder numbers must be within `1` to `9`.
+> - Unsupported or missing placeholders will not be replaced correctly.
 
 ---
 
-## 3. 占位符规则 / Placeholder Rules
-- `{1}` 对应第 1 个替换参数  
-  `{1}` corresponds to the 1st replacement parameter
+## 4. Usage Example
 
-- `{2}` 对应第 2 个替换参数  
-  `{2}` corresponds to the 2nd replacement parameter
-
-- 以此类推，最多支持 `{7}`  
-  And so on, up to `{7}`
-
-- 占位符中的数字必须为 `1~9`  
-  The number inside the placeholder must be within `1~9`
-
----
-
-## 4. 示例 / Examples
-
-### 示例 1：字符串替换 / String Replacement
 ```pascal
 CALL WRITE_ERROR('Gripper{1} is Not {2}', 2, 3, 'Open')
 ```
 
-输出示例 / Output example:
+### Example Explanation
+
+| Item | Value | Description |
+|------|-------|-------------|
+| `CALL WRITE_ERROR` | — | Called KAREL program |
+| `'Gripper{1} is Not {2}'` | — | Alarm message with placeholders |
+| `2` | — | Alarm level |
+| `3` | — | Replacement parameter for `{1}` |
+| `'Open'` | — | Replacement parameter for `{2}` |
+
+### Output Example
+
 ```text
-APSH-092 Gripper1 is Not Open
+APSH-092 Gripper3 is Not Open
 ```
 
-### 示例 2：等待信号提示 / Waiting Signal Message
+---
+
+## 5. Additional Examples
+
+### Example 1
 ```pascal
 CALL WRITE_ERROR('WAIT FOR DI[{1}] = {2}', 0, 121, 'ON')
 ```
 
-### 示例 3：数值参数 / Numeric Parameter
+| Item | Value | Description |
+|------|-------|-------------|
+| `0` | — | Alarm level: prompt only |
+| `121` | — | Replacement parameter for `{1}` |
+| `'ON'` | — | Replacement parameter for `{2}` |
+
+### Example 2
 ```pascal
 CALL WRITE_ERROR('Error Place No, GI[1] = {1}', 2, R[1:Override])
 ```
 
-### 示例 4：混合类型 / Mixed Types
+### Example 3
 ```pascal
 CALL WRITE_ERROR('Int={1} Real={2} Str={3}', 2, 1001, 3.1415, 'Hello')
 ```
 
 ---
 
-## 5. 说明 / Notes
-- 报警信息会通过 `POST_ERR` 发布到示教器。  
-  The alarm message is posted to the teach pendant via `POST_ERR`.
-
-- 参数类型会自动转换为字符串后进行替换。  
-  Parameter types are automatically converted to strings before replacement.
-
-- 报警等级建议按现场实际需求设置。  
-  It is recommended to set the alarm level according to actual application needs.
+## 6. Placeholder Rules
+- `{1}` corresponds to the first replacement parameter.
+- `{2}` corresponds to the second replacement parameter.
+- Up to `{7}` are supported by the current implementation.
+- Placeholder digits must be between `1` and `9`.
+- If the placeholder format is invalid, it will be treated as plain text.
 
 ---
 
-## 6. 注意事项 / Important Notes
-- 占位符格式必须正确，例如 `{1}`、`{2}`。  
-  Placeholder format must be correct, e.g. `{1}`, `{2}`.
+## 7. Notes
+- The alarm is posted using `POST_ERR`.
+- Parameter values are converted automatically to string format when needed.
+- The teach pendant status bar displays the formatted alarm message.
 
-- 参数数量不足时，未提供的占位符不会被正确替换。  
-  If not enough parameters are provided, placeholders will not be replaced correctly.
+---
 
-- 建议报警文本长度不要过长。  
-  It is recommended to keep alarm text reasonably short.
+## 8. Important Considerations
+- Ensure the alarm text uses valid placeholder syntax, such as `{1}` or `{2}`.
+- Provide enough replacement parameters for all placeholders used in the message.
+- Keep alarm messages concise and clear.

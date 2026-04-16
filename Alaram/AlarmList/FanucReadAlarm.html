@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>发那科机器人报警列表解析</title>
+<style>
+  :root{
+    --bg:#0b1220; --card:#121a2a; --text:#e7eefc; --muted:#9fb0d0;
+    --line:#24314c; --danger:#ff5a6b; --ok:#2dd4bf;
+  }
+  *{
+    box-sizing:border-box;
+  }
+  body{
+    margin:0;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:linear-gradient(180deg,var(--bg),#060a14);
+    color:var(--text);
+  }
+  .wrap{
+    max-width:1100px;
+    margin:28px auto;
+    padding:0 16px 24px;
+  }
+  h1{
+    margin:0 0 12px 0;
+    font-size:18px;
+    font-weight:700;
+  }
+  .card{
+    background:rgba(18,26,42,.92);
+    border:1px solid rgba(36,49,76,.85);
+    border-radius:14px;
+    padding:14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.28);
+  }
+  .row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+  }
+  .row + .row{
+    margin-top:10px;
+  }
+  .btn{
+    background:#17233a;
+    border:1px solid rgba(36,49,76,.9);
+    color:var(--text);
+    padding:10px 12px;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:13px;
+    user-select:none;
+  }
+  .btn.primary{
+    background:linear-gradient(180deg,#1f6feb,#1b56c9);
+    border-color:rgba(78,161,255,.55);
+  }
+  .btn.danger{
+    background:#2a1520;
+    border-color:rgba(255,90,107,.4);
+  }
+  .btn.ok{
+    background:#0d2a2a;
+    border-color:rgba(45,212,191,.4);
+  }
+  .btn:disabled{
+    opacity:.45;
+    cursor:not-allowed;
+  }
+
+  input[type="file"]{
+    display:none;
+  }
+  .fileTag{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    padding:8px 10px;
+    border-radius:10px;
+    border:1px dashed rgba(36,49,76,.9);
+    background:rgba(15,23,41,.65);
+    min-width:320px;
+    flex:1;
+  }
+  .fileName{
+    font-size:12px;
+    color:var(--muted);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width:680px;
+  }
+  .badge{
+    display:inline-block;
+    font-size:11px;
+    padding:3px 8px;
+    border-radius:999px;
+    border:1px solid rgba(36,49,76,.9);
+    background:rgba(15,23,41,.6);
+    color:#cfe0ff;
+    white-space:nowrap;
+  }
+  .search, .headerInput{
+    flex:1;
+    min-width:240px;
+    background:rgba(15,23,41,.65);
+    border:1px solid rgba(36,49,76,.9);
+    color:var(--text);
+    padding:10px 12px;
+    border-radius:10px;
+    outline:none;
+    font-size:13px;
+  }
+  .headerInput{
+    min-width:420px;
+  }
+  .meta{
+    display:flex;
+    gap:12px;
+    flex-wrap:wrap;
+    color:var(--muted);
+    font-size:12px;
+    margin-top:10px;
+  }
+  .pill{
+    border:1px solid rgba(36,49,76,.9);
+    background:rgba(15,23,41,.6);
+    padding:6px 10px;
+    border-radius:999px;
+  }
+  .msg{
+    margin-top:10px;
+    font-size:12px;
+    color:var(--muted);
+  }
+  .msg.error{
+    color:#ffb4bd;
+  }
+
+  table{
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0;
+    margin-top:12px;
+    border-radius:12px;
+    overflow:hidden;
+    border:1px solid rgba(36,49,76,.9);
+  }
+  thead th{
+    text-align:left;
+    font-weight:600;
+    font-size:12px;
+    color:#cfe0ff;
+    background:rgba(15,23,41,.85);
+    border-bottom:1px solid rgba(36,49,76,.9);
+    padding:10px;
+    position:sticky;
+    top:0;
+    z-index:1;
+  }
+  tbody td{
+    padding:10px;
+    border-bottom:1px solid rgba(36,49,76,.55);
+    font-size:13px;
+    vertical-align:top;
+  }
+  tbody tr:hover td{
+    background:rgba(78,161,255,.06);
+  }
+  tbody tr:last-child td{
+    border-bottom:none;
+  }
+  .mono{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  }
+  .sectionLabel{
+    font-size:12px;
+    color:var(--muted);
+    min-width:72px;
+  }
+  .toolbar{
+    margin-top:12px;
+  }
+  .tableWrap{
+    margin-top:12px;
+    overflow:auto;
+    max-height:68vh;
+    border-radius:12px;
+  }
+  .hint{
+    color:var(--muted);
+    font-size:12px;
+    margin-top:8px;
+  }
+  .titleArea{
+    margin-bottom:12px;
+  }
+  .subTitle{
+    color:var(--muted);
+    font-size:12px;
+    margin-top:4px;
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="titleArea">
+      <h1>发那科机器人报警列表解析</h1>
+      <div class="subTitle">输出格式：<span class="mono">ErrorID</span> + <span class="mono">Message</span></div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <label class="btn primary" for="fileInput">选择报警文件</label>
+        <input type="file" id="fileInput" multiple accept=".stm,.htm,.html" />
+        <div class="fileTag" title="支持多文件导入">
+          <span class="badge">Files</span>
+          <div id="fileName" class="fileName">尚未选择文件</div>
+        </div>
+      </div>
+
+      <div class="row toolbar">
+        <input type="text" id="searchInput" class="search" placeholder="搜索 ErrorID / Message..." />
+        <button id="clearBtn" class="btn danger" disabled>清空</button>
+        <button id="exportBtn" class="btn ok" disabled>导出 HTML</button>
+      </div>
+
+      <div class="meta">
+        <div class="pill">解析结果数：<span id="countAll">0</span></div>
+        <div class="pill">显示结果数：<span id="countShown">0</span></div>
+      </div>
+
+      <div id="msg" class="msg">请导入 .stm / .htm / .html 文件。</div>
+
+      <div class="tableWrap">
+        <table id="resultTable">
+          <thead>
+            <tr>
+              <th style="width:180px;">ErrorID</th>
+              <th>Message</th>
+            </tr>
+          </thead>
+          <tbody id="resultBody">
+          </tbody>
+        </table>
+      </div>
+      <div class="hint">提示：表格可滚动浏览，搜索框支持实时筛选。</div>
+    </div>
+  </div>
+
+<script>
+  const fileInput = document.getElementById('fileInput');
+  const fileName = document.getElementById('fileName');
+  const searchInput = document.getElementById('searchInput');
+  const clearBtn = document.getElementById('clearBtn');
+  const exportBtn = document.getElementById('exportBtn');
+  const resultBody = document.getElementById('resultBody');
+  const countAll = document.getElementById('countAll');
+  const countShown = document.getElementById('countShown');
+  const msg = document.getElementById('msg');
+
+  // 全部报警数据
+  let allAlarmRows = [];
+
+  // FACILITY CODE 到十进制编号映射
+  const facilityCodeMap = {
+    "OS": 0, "SRIO": 1, "FILE": 2, "PROG": 3, "COND": 4,
+    "ELOG": 5, "MCTL": 6, "MEMO": 7, "GUID": 8, "TPIF": 9,
+    "FLPY": 10, "SRVO": 11, "INTP": 12, "PRIO": 13, "TPAX": 14,
+    "MOTN": 15, "VARS": 16, "ROUT": 17, "WNDW": 18, "JOG": 19,
+    "APPL": 20, "LANG": 21, "ASBN": 22, "SPOT": 23, "SYST": 24,
+    "SCIO": 25, "PALT": 26, "UAPL": 27, "PMON": 28, "TOOL": 29,
+    "SVGN": 30, "PWD": 31, "VISN": 32, "DICT": 33, "KCLI": 34,
+    "TRAN": 35, "TKSP": 36, "COPT": 37, "APSH": 38, "ISD": 39,
+    "DMER": 40, "MHND": 41, "CMND": 42, "RPM": 43, "LNTK": 44,
+    "WEAV": 45, "TCPP": 46, "TAST": 47, "MUPS": 48, "MIGE": 49,
+    "LSR": 50, "SEAL": 51, "PAIN": 52, "ARC": 53, "TRAK": 54,
+    "CALB": 55, "SP": 56, "MACR": 57, "SENS": 58, "COMP": 59,
+    "THSR": 60, "QMGR": 61, "DJOG": 64, "OPTN": 65, "HRTL": 66,
+    "HOST": 67, "MENT": 68, "SSPC": 69, "FIG": 70, "LDG": 71,
+    "DX": 72, "CNTR": 73, "LODC": 74, "PFMS": 75, "DNET": 76,
+    "GBOX": 77, "PAL2": 78, "SHAP": 79, "ATCP": 80, "CART": 81,
+    "CD": 82, "MARL": 83, "DMDR": 84, "FRSY": 85, "PNT1": 86,
+    "FLEX": 87, "IB-S": 88, "RTCP": 89, "TG": 90, "FORC": 91,
+    "PROF": 92, "RPC": 93, "VC": 94, "ISDT": 95, "GUI": 96,
+    "CUST": 97, "POST": 98, "NTOS": 100, "ATGP": 102, "WMAP": 103,
+    "ASST": 104, "FIND": 105, "CALM": 106, "LSTP": 108, "LECO": 109,
+    "MLOG": 110, "APC": 111, "ACAL": 112, "TPCL": 113, "CPMO": 114,
+    "PALL": 115, "TJOG": 116, "CVIS": 117, "BBOX": 118, "TMAT": 119,
+    "TANG": 120, "DPMO": 121, "KALM": 122, "SDTL": 123, "ICRZ": 124,
+    "LRNR": 125, "RRMC": 126, "IRPK": 127, "XMLF": 129, "RIPE": 130,
+    "SPRM": 131, "PICK": 132, "SVTL": 135, "FXTL": 136, "PNT2": 137,
+    "ATZN": 138, "VDIG": 139, "PTPG": 140, "SYMR": 141, "TEST": 142,
+    "SENC": 143, "BRCH": 144, "FPLN": 145, "PROC": 146, "MASI": 147,
+    "DIAG": 148, "DTBR": 149, "NCBN": 150, "WCLN": 151, "IRAL": 152,
+    "IFPN": 153, "SEAM": 154, "TMSN": 155, "ATEX": 156, "FFL": 157,
+    "PLCM": 158, "SEC": 159, "MCGR": 160, "PZDT": 161, "XSIF": 162,
+    "PRSS": 163, "RIVT": 164, "FAS2": 165, "ROOP": 166, "RMIT": 167,
+    "EVIO": 168, "PLUG": 169, "RTVT": 170
+  };
+
+  function decodeHtml(html) {
+    const txt = document.createElement("textarea");
+    txt.innerHTML = html;
+    return txt.value;
+  }
+
+  function escapeHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function extractAlarms(content) {
+    // 兼容 A/B：匹配 <a href="ACAL.htm#ACAL-007">ACAL-007 xxx</a>
+    const regex = /<a\s+href="([A-Z]{2,4})\.htm#[A-Z]{2,4}-(\d{1,3})">([\s\S]*?)<\/a>/g;
+
+    let match;
+    const rows = [];
+
+    while ((match = regex.exec(content)) !== null) {
+      const code = match[1];
+      const id = match[2].padStart(3, "0");
+      const rawText = match[3];
+
+      const fullText = decodeHtml(rawText).replace(/;/g, ",");
+
+      const decimalCode = facilityCodeMap[code];
+      if (decimalCode !== undefined) {
+        const errorId = `${String(decimalCode).padStart(3, "0")}${id}`;
+        rows.push({
+          errorId,
+          message: fullText
+        });
+      }
+    }
+
+    return rows;
+  }
+
+  function renderTable(rows) {
+    resultBody.innerHTML = rows.map(row => `
+      <tr>
+        <td class="mono">${escapeHtml(row.errorId)}</td>
+        <td>${escapeHtml(row.message)}</td>
+      </tr>
+    `).join("");
+
+    countShown.textContent = rows.length;
+  }
+
+  function applyFilter() {
+    const keyword = searchInput.value.trim().toLowerCase();
+    let filtered = allAlarmRows;
+
+    if (keyword) {
+      filtered = allAlarmRows.filter(row =>
+        row.errorId.toLowerCase().includes(keyword) ||
+        row.message.toLowerCase().includes(keyword)
+      );
+    }
+
+    renderTable(filtered);
+    countAll.textContent = allAlarmRows.length;
+  }
+
+  function setStatus(text, isError = false) {
+    msg.textContent = text;
+    msg.className = isError ? "msg error" : "msg";
+  }
+
+  fileInput.addEventListener('change', () => {
+    const files = Array.from(fileInput.files || []);
+    allAlarmRows = [];
+    resultBody.innerHTML = "";
+    searchInput.value = "";
+    countAll.textContent = "0";
+    countShown.textContent = "0";
+    exportBtn.disabled = true;
+    clearBtn.disabled = true;
+
+    if (!files.length) {
+      fileName.textContent = "尚未选择文件";
+      setStatus("请导入 .stm / .htm / .html 文件。");
+      return;
+    }
+
+    fileName.textContent = files.map(f => f.name).join("、");
+    setStatus(`正在解析 ${files.length} 个文件...`);
+
+    let processed = 0;
+
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const content = e.target.result;
+        const alarms = extractAlarms(content);
+
+        if (alarms.length > 0) {
+          allAlarmRows.push(...alarms);
+        }
+
+        processed++;
+
+        if (processed === files.length) {
+          applyFilter();
+          clearBtn.disabled = allAlarmRows.length === 0;
+          exportBtn.disabled = allAlarmRows.length === 0;
+
+          if (allAlarmRows.length === 0) {
+            setStatus("未匹配到报警信息。", true);
+          } else {
+            setStatus(`解析完成，共 ${allAlarmRows.length} 条报警记录。`);
+          }
+        }
+      };
+
+      reader.onerror = () => {
+        processed++;
+        if (processed === files.length) {
+          applyFilter();
+        }
+        setStatus(`文件读取失败：${file.name}`, true);
+      };
+
+      reader.readAsText(file);
+    });
+  });
+
+  searchInput.addEventListener('input', applyFilter);
+
+  clearBtn.addEventListener('click', () => {
+    allAlarmRows = [];
+    fileInput.value = "";
+    fileName.textContent = "尚未选择文件";
+    searchInput.value = "";
+    resultBody.innerHTML = "";
+    countAll.textContent = "0";
+    countShown.textContent = "0";
+    clearBtn.disabled = true;
+    exportBtn.disabled = true;
+    setStatus("已清空。请重新导入文件。");
+  });
+
+  exportBtn.addEventListener('click', () => {
+    if (allAlarmRows.length === 0) return;
+
+    const rows = allAlarmRows.map(row => `
+      <tr>
+        <td>${escapeHtml(row.errorId)}</td>
+        <td>${escapeHtml(row.message)}</td>
+      </tr>
+    `).join("");
+
+    const html = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>报警列表</title>
+<style>
+  body{
+    margin:0;
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:#0b1220;
+    color:#e7eefc;
+    padding:24px;
+  }
+  h1{ margin:0 0 12px 0; font-size:18px; }
+  .meta{ color:#9fb0d0; font-size:12px; margin-bottom:12px; }
+  table{
+    width:100%;
+    border-collapse:separate;
+    border-spacing:0;
+    border:1px solid #24314c;
+    border-radius:12px;
+    overflow:hidden;
+  }
+  thead th{
+    text-align:left;
+    background:#121a2a;
+    color:#cfe0ff;
+    font-size:12px;
+    padding:10px;
+    border-bottom:1px solid #24314c;
+  }
+  tbody td{
+    padding:10px;
+    border-bottom:1px solid rgba(36,49,76,.55);
+    vertical-align:top;
+    font-size:13px;
+  }
+  tbody tr:last-child td{ border-bottom:none; }
+  tbody tr:hover td{ background:rgba(78,161,255,.06); }
+  .mono{
+    font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  }
+</style>
+</head>
+<body>
+  <h1>发那科机器人报警列表</h1>
+  <div class="meta">共 ${allAlarmRows.length} 条记录</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:180px;">ErrorID</th>
+        <th>Message</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rows}
+    </tbody>
+  </table>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'alarmList.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+</script>
+</body>
+</html>

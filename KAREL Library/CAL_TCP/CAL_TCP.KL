@@ -28,6 +28,10 @@ pos3   IN CMOS :XYZWPR
 pos4   IN CMOS :XYZWPR
 
 tcp    :XYZWPR
+tcp1   :XYZWPR
+tcp2   :XYZWPR
+tcp3   :XYZWPR
+tcp4   :XYZWPR
 center :XYZWPR
 
 status :INTEGER

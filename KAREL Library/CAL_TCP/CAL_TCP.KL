@@ -22,10 +22,10 @@ CONST
 EPS = 0.000001
 
 VAR
-pos1    :XYZWPR
-pos2    :XYZWPR
-pos3    :XYZWPR
-pos4    :XYZWPR
+pos1   IN CMOS :XYZWPR
+pos2   IN CMOS :XYZWPR
+pos3   IN CMOS :XYZWPR
+pos4   IN CMOS :XYZWPR
 
 tcp		:XYZWPR
 

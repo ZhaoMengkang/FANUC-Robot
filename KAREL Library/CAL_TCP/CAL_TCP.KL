@@ -253,10 +253,36 @@ BEGIN
     ENDIF
 
     -- Step 2: calculate TCP from each pose and the sphere center
-    WRPR_TO_TCP(pos1, center, tcp, status)
+    WRPR_TO_TCP(pos1, center, tcp1, status)
     IF status <> 0 THEN
         ABORT
     ENDIF
+
+    WRPR_TO_TCP(pos2, center, tcp2, status)
+    IF status <> 0 THEN
+        ABORT
+    ENDIF
+
+    WRPR_TO_TCP(pos3, center, tcp3, status)
+    IF status <> 0 THEN
+        ABORT
+    ENDIF
+
+    WRPR_TO_TCP(pos4, center, tcp4, status)
+    IF status <> 0 THEN
+        ABORT
+    ENDIF
+
+    sum_x = (tcp1.x + tcp2.x + tcp3.x + tcp4.x) / 4.0
+    sum_y = (tcp1.y + tcp2.y + tcp3.y + tcp4.y) / 4.0
+    sum_z = (tcp1.z + tcp2.z + tcp3.z + tcp4.z) / 4.0
+
+    tcp.x = sum_x
+    tcp.y = sum_y
+    tcp.z = sum_z
+    tcp.w = 0
+    tcp.p = 0
+    tcp.r = 0
         
     
 END CAL_TCP

@@ -27,13 +27,12 @@ pos2   IN CMOS :XYZWPR
 pos3   IN CMOS :XYZWPR
 pos4   IN CMOS :XYZWPR
 
-tcp		:XYZWPR
+tcp    :XYZWPR
+center :XYZWPR
 
-center	:XYZWPR
+status :INTEGER
 
-status  :INTEGER
-
-ROUTINE CALCSPH(p1:XYZWPR;p2:XYZWPR;p3:XYZWPR;p4:XYZWPR;center:XYZWPR;status:INTEGER)
+ROUTINE CALCSPH(p1:XYZWPR; p2:XYZWPR; p3:XYZWPR; p4:XYZWPR; center:XYZWPR; status:INTEGER)
 VAR
 A   :ARRAY[3,3] OF REAL
 B   :ARRAY[3] OF REAL
@@ -60,11 +59,10 @@ BEGIN
 
     status = 0
 
+    -- Build the linear system from the sphere equations
+    -- A * X = B, where X = [cx, cy, cz]
     s1 = p1.x*p1.x + p1.y*p1.y + p1.z*p1.z
     
-    -- Build the linear system A * X = B
-    -- X = [center.x, center.y, center.z]
-    -- Each row is derived by subtracting the first sphere equation from the others
     FOR i = 1 TO 3 DO
         j = i + 1
         A[i,1] = 2.0 * (P[j].x - P[1].x)
@@ -77,20 +75,21 @@ BEGIN
     -- Gaussian elimination with partial pivoting
     FOR i = 1 TO 3 DO
         max_row = i
-        -- Find the row with the largest pivot value in the current column
+
+        -- Select the row with the largest pivot element
         FOR k = i + 1 TO 3 DO
             IF ABS(A[k,i]) > ABS(A[max_row,i]) THEN
                 max_row = k
             ENDIF
         ENDFOR
 
-        -- Abort if the matrix is singular or nearly singular
+        -- Abort if the system is singular or nearly singular
         IF ABS(A[max_row,i]) < EPS THEN
             status = -1
             RETURN
         ENDIF
 
-        -- Swap current row with pivot row
+        -- Swap pivot row into current position
         IF max_row <> i THEN
             FOR k = i TO 3 DO
                 tmp = A[i,k]
@@ -103,7 +102,7 @@ BEGIN
             B[max_row] = tb
         ENDIF
 
-        -- Eliminate values below the pivot
+        -- Eliminate lower rows
         FOR k = i + 1 TO 3 DO
             factor = A[k,i] / A[i,i]
             FOR j = i TO 3 DO
@@ -113,7 +112,7 @@ BEGIN
         ENDFOR
     ENDFOR
 
-    -- Back substitution
+    -- Back substitution to solve X
     FOR i = 3 DOWNTO 1 DO
         sum = B[i]
         FOR j = i + 1 TO 3 DO
@@ -122,17 +121,115 @@ BEGIN
         X[i] = sum / A[i,i]
     ENDFOR
 
-    -- Write the calculated sphere center to the output structure
+    -- Output sphere center
     center.x = X[1]
     center.y = X[2]
     center.z = X[3]
-
 END CALCSPH
 
-----------------------------------------------------
--- BEGIN Main
-----------------------------------------------------
+ROUTINE WRPR_TO_TCP(p:XYZWPR; center:XYZWPR; tcp:XYZWPR; status:INTEGER)
+VAR
+rz :REAL
+ry :REAL
+rx :REAL
+c1 :REAL
+s1 :REAL
+c2 :REAL
+s2 :REAL
+c3 :REAL
+s3 :REAL
+
+T   :ARRAY[4,4] OF REAL
+Ti  :ARRAY[4,4] OF REAL
+
+i   :INTEGER
+j   :INTEGER
 BEGIN
-    CALCSPH(pos1,pos2,pos3,pos4,center,status)
-    -- tcp = center : INV((pos1))
+    status = 0
+
+    -- Extract orientation angles from the robot pose
+    rx = p.w
+    ry = p.p
+    rz = p.r
+
+    -- Precompute trigonometric values
+    c1 = COS(rz)
+    s1 = SIN(rz)
+    c2 = COS(ry)
+    s2 = SIN(ry)
+    c3 = COS(rx)
+    s3 = SIN(rx)
+
+    -- Build homogeneous transformation matrix T
+    -- Rotation + translation of pose p
+    T[1,1] = c1*c2
+    T[1,2] = c1*s2*s3 - s1*c3
+    T[1,3] = c1*s2*c3 + s1*s3
+    T[1,4] = p.x
+
+    T[2,1] = s1*c2
+    T[2,2] = s1*s2*s3 + c1*c3
+    T[2,3] = s1*s2*c3 - c1*s3
+    T[2,4] = p.y
+
+    T[3,1] = -s2
+    T[3,2] = c2*s3
+    T[3,3] = c2*c3
+    T[3,4] = p.z
+
+    T[4,1] = 0
+    T[4,2] = 0
+    T[4,3] = 0
+    T[4,4] = 1
+
+    -- Inverse transform: for rotation matrix, inverse rotation = transpose
+    -- Translation part is computed accordingly
+    Ti[1,1] = T[1,1]
+    Ti[1,2] = T[2,1]
+    Ti[1,3] = T[3,1]
+    Ti[1,4] = -(Ti[1,1]*T[1,4] + Ti[1,2]*T[2,4] + Ti[1,3]*T[3,4])
+
+    Ti[2,1] = T[1,2]
+    Ti[2,2] = T[2,2]
+    Ti[2,3] = T[3,2]
+    Ti[2,4] = -(Ti[2,1]*T[1,4] + Ti[2,2]*T[2,4] + Ti[2,3]*T[3,4])
+
+    Ti[3,1] = T[1,3]
+    Ti[3,2] = T[2,3]
+    Ti[3,3] = T[3,3]
+    Ti[3,4] = -(Ti[3,1]*T[1,4] + Ti[3,2]*T[2,4] + Ti[3,3]*T[3,4])
+
+    Ti[4,1] = 0
+    Ti[4,2] = 0
+    Ti[4,3] = 0
+    Ti[4,4] = 1
+
+    -- Transform the sphere center into the local tool frame
+    tcp.x = Ti[1,1]*center.x + Ti[1,2]*center.y + Ti[1,3]*center.z + Ti[1,4]
+    tcp.y = Ti[2,1]*center.x + Ti[2,2]*center.y + Ti[2,3]*center.z + Ti[2,4]
+    tcp.z = Ti[3,1]*center.x + Ti[3,2]*center.y + Ti[3,3]*center.z + Ti[3,4]
+
+    -- Only position offset is needed for TCP calibration
+    tcp.w = 0
+    tcp.p = 0
+    tcp.r = 0
+END WRPR_TO_TCP
+
+BEGIN
+    -- Step 1: calculate the sphere center from four measured points
+    CALCSPH(pos1, pos2, pos3, pos4, center, status)
+    IF status <> 0 THEN
+        ABORT
+    ENDIF
+
+    -- Step 2: calculate TCP from each pose and the sphere center
+    WRPR_TO_TCP(pos1, center, tcp, status)
+    IF status <> 0 THEN
+        ABORT
+    ENDIF
+
+    -- If needed, repeat for pos2/pos3/pos4 and average the TCP results here
+    -- Example:
+    -- tcp = (tcp1 + tcp2 + tcp3 + tcp4) / 4
+
 END CAL_TCP

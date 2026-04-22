@@ -31,6 +31,9 @@ tcp    :XYZWPR
 center :XYZWPR
 
 status :INTEGER
+sum_x  :REAL
+sum_y  :REAL
+sum_z  :REAL
 
 ROUTINE CALCSPH(p1:XYZWPR; p2:XYZWPR; p3:XYZWPR; p4:XYZWPR; center:XYZWPR; status:INTEGER)
 VAR

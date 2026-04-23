@@ -17,7 +17,7 @@ PROGRAM KLPRNEAR
 %NOPAUSE = ERROR + COMMAND + TPENABLE
 %INCLUDE kliotyps
 CONST
-TOLERANCE_R = 147  --Number Register index R[147:Grip cnd Tol]
+TOLERANCE_R = 147  --Number Register index R[147:CompareTol]
 
 VAR
 cur_pos     :POSITION IN GROUP[1]
@@ -43,7 +43,7 @@ BEGIN
     ENDUSING
 
     -- Tolerance
-    SET_REG_CMT(TOLERANCE_R, 'Grip cnd Tol ', status);IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+    SET_REG_CMT(TOLERANCE_R, 'CompareTol', status);IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
     GET_REG(TOLERANCE_R, real_flag, int_value, real_value, status);IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
     IF(real_flag)THEN
         tolerance = real_value

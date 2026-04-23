@@ -1,4 +1,4 @@
-PROGRAM CAL_TCP
+PROGRAM CALC_TCP
 ----------------------------------------------------
 -- Creation date: 2026.04.22
 -- Created by: Zhao Mengkang
@@ -292,4 +292,4 @@ BEGIN
     tcp.r = 0
         
     
-END CAL_TCP
+END CALC_TCP

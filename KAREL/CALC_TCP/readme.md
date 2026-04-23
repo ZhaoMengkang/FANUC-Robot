@@ -1,8 +1,8 @@
-# CAL_TCP Program Documentation
+# CALC_TCP Program Documentation
 
 ## 1. Program Purpose
 
-`CAL_TCP` is a robot calibration program used to:
+`CALC_TCP` is a robot calibration program used to:
 
 - Calculate the **sphere center** from 4 measured poses
 - Convert the sphere center into the **tool/flange coordinate frame**

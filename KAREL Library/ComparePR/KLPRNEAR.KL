@@ -1,0 +1,93 @@
+
+--***********************************
+-- Program : KLPRNEAR
+-- Function: Used to compare whether the 
+--           current POSITION AND the PR POSITION exceed 
+--           the specified distance.
+-- Author: zhaomengkang
+-- Date: 2026/04/13
+-- Ver: V1.0
+--***********************************
+PROGRAM KLPRNEAR
+%COMMENT = 'PR[] Near'
+%NOLOCKGROUP
+%NOBUSYLAMP
+%SYSTEM
+%NOPAUSESHFT
+%NOPAUSE = ERROR + COMMAND + TPENABLE
+%INCLUDE kliotyps
+CONST
+TOLERANCE_R = 147  --Number Register index R[147:Grip cnd Tol]
+
+VAR
+cur_pos     :POSITION IN GROUP[1]
+cmp_pos     :POSITION IN GROUP[1]
+null_pos    :XYZWPR IN GROUP[1]
+vector_var  :VECTOR
+distance    :REAL
+tolerance   :REAL
+data_type   :INTEGER
+pr_index    :INTEGER
+flag_index  :INTEGER
+pr_comment  :STRING[25]
+status      :INTEGER
+real_flag   :BOOLEAN
+int_value   :INTEGER
+real_value  :REAL
+BEGIN
+    -- Init varaible
+    USING null_pos DO
+        x = 0; y = 0; z = 0;
+        w = 0; p = 0; r = 0;
+        CNV_STR_CONF('N,U,T 0,0,0',config_data,0)
+    ENDUSING
+
+    -- Tolerance
+    SET_REG_CMT(TOLERANCE_R, 'Grip cnd Tol ', status);IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+    GET_REG(TOLERANCE_R, real_flag, int_value, real_value, status);IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+    IF(real_flag)THEN
+        tolerance = real_value
+    ELSE
+        tolerance = int_value
+    ENDIF
+    
+    -- Get param list   
+    -- Get pos preg
+    GET_TPE_PRM(1,data_type,pr_index,0,'',status);IF(status <> 0)THEN POST_ERR(38092,'Param1 not exist',0,2);ENDIF
+    IF(data_type <> 1)THEN POST_ERR(38092,'param1 need integer type',0,2);ENDIF
+    GET_PREG_CMT(pr_index,pr_comment,status);IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+    cmp_pos = GET_POS_REG(pr_index,status,1);IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+    
+    -- Get Flag index
+    GET_TPE_PRM(2,data_type,flag_index,0,'',status);IF(status <> 0)THEN POST_ERR(38092,'Param2 not exist',0,2);ENDIF
+    IF(data_type <> 1)THEN POST_ERR(38092,'param2 need integer type',0,2);ENDIF
+    SET_PORT_CMT(io_flag,flag_index,'PrNearResult',status);IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+        
+    -- Change Karel frame data
+    -- Utool
+    IF($MNUTOOLNUM[1] <> 0)THEN
+        $UTOOL = $MNUTOOL[1,$MNUTOOLNUM[1]]
+    ELSE
+        $UTOOL = null_pos
+    ENDIF
+    -- Uframe
+    IF($MNUFRAMENUM[1] <> 0)THEN
+        $UFRAME = $MNUFRAME[1,$MNUFRAMENUM[1]]
+    ELSE
+        $UFRAME = null_pos
+    ENDIF
+    
+    -- Current position
+    cur_pos = CURPOS(0,0,1)
+    
+    -- Compare position
+    vector_var = cur_pos.location - cmp_pos.location
+    distance = SQRT(vector_var @ vector_var)
+    
+    -- Result       
+    IF(distance > tolerance)THEN
+        SET_PORT_VAL(io_flag,flag_index,0,status);IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+    ELSE
+        SET_PORT_VAL(io_flag,flag_index,1,status);IF(status <> 0)THEN POST_ERR(status,'',0,2);ENDIF
+    ENDIF
+END KLPRNEAR
